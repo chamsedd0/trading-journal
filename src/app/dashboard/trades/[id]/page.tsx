@@ -10,7 +10,6 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { use } from 'react';
 
 interface Trade {
   id: string;
@@ -38,8 +37,7 @@ interface Account {
 }
 
 export default function TradeDetailPage({ params }: { params: { id: string } }) {
-  const unwrappedParams = use(params);
-  const tradeId = unwrappedParams.id;
+  const tradeId = params.id;
   const router = useRouter();
   const { user } = useAuth();
   const [trade, setTrade] = useState<Trade | null>(null);
