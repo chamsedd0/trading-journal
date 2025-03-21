@@ -71,6 +71,7 @@ interface AuthContextType {
   addAccount: (account: Omit<TradingAccount, 'id' | 'createdAt' | 'updatedAt'>) => Promise<string>;
   updateAccount: (accountId: string, data: Partial<TradingAccount>) => Promise<void>;
   completeSetup: () => Promise<void>;
+  refreshAuthState: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -453,6 +454,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const refreshAuthState = async () => {
+    if (!auth.currentUser) return;
+    
+    try {
+      setLoading(true);
+      
+      // Get the current user document
+      const userDoc = await getDoc(doc(db, "users", auth.currentUser.uid));
+      
+      if (userDoc.exists()) {
+        // Combine auth user with updated data from Firestore
+        const userData = userDoc.data() as UserProfile;
+        const enhancedUser = {
+          ...auth.currentUser,
+          profile: userData
+        };
+        setUser(enhancedUser as AuthUser);
+      }
+    } catch (error) {
+      console.error("Error refreshing auth state", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <AuthContext.Provider 
       value={{ 
@@ -465,7 +491,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         updateProfile,
         addAccount,
         updateAccount,
-        completeSetup
+        completeSetup,
+        refreshAuthState
       }}
     >
       {children}
@@ -479,4 +506,13 @@ export function useAuth() {
     throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
+}
+
+// Helper function to refresh auth state from outside components
+export async function refreshAuthState() {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error("refreshAuthState must be used within an AuthProvider");
+  }
+  return context.refreshAuthState();
 } 

@@ -4,6 +4,9 @@ import { useAuth } from "@/lib/auth-context";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect } from "react";
 import { toast } from "sonner";
+import { LayoutSkeleton } from "@/components/skeletons/layout-skeleton";
+import { LoginSkeleton } from "@/components/skeletons/login-skeleton";
+import { OnboardingSkeleton } from "@/components/skeletons/onboarding-skeleton";
 
 interface AuthGuardProps {
   children: React.ReactNode;
@@ -64,13 +67,19 @@ export function AuthGuard({ children }: AuthGuardProps) {
     }
   }, [user, loading, pathname, router]);
 
-  // Show a simple loading state while checking auth
+  // Show a skeleton loading state while checking auth
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p>Loading...</p>
-      </div>
-    );
+    // Show appropriate skeleton based on the current path
+    if (pathname.startsWith('/dashboard')) {
+      return <LayoutSkeleton />;
+    } else if (pathname.startsWith('/auth')) {
+      return <LoginSkeleton />;
+    } else if (pathname === '/onboarding') {
+      return <OnboardingSkeleton />;
+    } else {
+      // Default skeleton for other routes
+      return <LoginSkeleton />;
+    }
   }
 
   return <>{children}</>;

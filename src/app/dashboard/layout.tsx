@@ -9,6 +9,7 @@ import { DashboardNav } from "@/components/dashboard-nav";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Menu, Bell } from "lucide-react";
+import { LayoutSkeleton } from "@/components/skeletons/layout-skeleton";
 
 export default function DashboardLayout({
   children,
@@ -59,14 +60,7 @@ export default function DashboardLayout({
   };
   
   if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-pulse flex flex-col items-center gap-4">
-          <div className="h-12 w-12 rounded-full bg-muted"></div>
-          <div className="h-2 w-24 bg-muted rounded"></div>
-        </div>
-      </div>
-    );
+    return <LayoutSkeleton />;
   }
   
   if (!user) {
@@ -123,9 +117,11 @@ export default function DashboardLayout({
                 <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
               </span>
             </Button>
-            <div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center font-medium border border-primary/20">
-              {user?.displayName?.charAt(0) || user?.email?.charAt(0)?.toUpperCase() || 'U'}
-            </div>
+            <Link href="/dashboard/profile">
+              <div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center font-medium border border-primary/20 cursor-pointer hover:bg-primary/20 transition-colors">
+                {user?.displayName?.charAt(0) || user?.email?.charAt(0)?.toUpperCase() || 'U'}
+              </div>
+            </Link>
           </div>
         </header>
         

@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, use } from 'react';
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { useAuth } from '@/lib/auth-context';
@@ -37,7 +37,8 @@ interface Account {
 }
 
 export default function TradeDetailPage({ params }: { params: { id: string } }) {
-  const tradeId = params.id;
+  const resolvedParams = use(params);
+  const tradeId = resolvedParams.id;
   const router = useRouter();
   const { user } = useAuth();
   const [trade, setTrade] = useState<Trade | null>(null);

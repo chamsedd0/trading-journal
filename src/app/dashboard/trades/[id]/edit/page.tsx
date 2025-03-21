@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, use } from 'react';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { useAuth } from '@/lib/auth-context';
@@ -28,6 +28,7 @@ interface TradeFormData {
 
 export default function EditTradePage() {
   const params = useParams();
+  const resolvedParams = use(params);
   const router = useRouter();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -46,10 +47,10 @@ export default function EditTradePage() {
 
   useEffect(() => {
     const fetchTrade = async () => {
-      if (!user || !params.id) return;
+      if (!user || !resolvedParams.id) return;
 
       try {
-        const tradeId = params.id as string;
+        const tradeId = resolvedParams.id as string;
         const tradeDoc = await getDoc(doc(db, 'trades', tradeId));
 
         if (!tradeDoc.exists()) {
@@ -90,7 +91,7 @@ export default function EditTradePage() {
     };
 
     fetchTrade();
-  }, [user, params.id, router]);
+  }, [user, resolvedParams.id, router]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -123,7 +124,7 @@ export default function EditTradePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!user || !params.id) return;
+    if (!user || !resolvedParams.id) return;
     
     try {
       setIsSaving(true);
@@ -134,7 +135,7 @@ export default function EditTradePage() {
       const tradeDate = new Date(year, month - 1, day, hours, minutes, seconds);
       
       // Update the trade object
-      const tradeId = params.id as string;
+      const tradeId = resolvedParams.id as string;
       const tradeRef = doc(db, 'trades', tradeId);
       
       await updateDoc(tradeRef, {
@@ -171,7 +172,7 @@ export default function EditTradePage() {
         <h1 className="text-2xl font-bold">Edit Trade</h1>
         
         <div className="flex space-x-2">
-          <Link href={`/dashboard/trades/${params.id}`}>
+          <Link href={`/dashboard/trades/${resolvedParams.id}`}>
             <Button variant="ghost">Cancel</Button>
           </Link>
         </div>
@@ -319,7 +320,7 @@ export default function EditTradePage() {
             </div>
           </CardContent>
           <CardFooter className="flex justify-between">
-            <Link href={`/dashboard/trades/${params.id}`}>
+            <Link href={`/dashboard/trades/${resolvedParams.id}`}>
               <Button variant="outline" type="button">Cancel</Button>
             </Link>
             <Button type="submit" disabled={isSaving}>

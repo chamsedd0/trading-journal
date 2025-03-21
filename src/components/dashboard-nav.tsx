@@ -63,11 +63,6 @@ export function DashboardNav({ collapsed, setCollapsed }: {
       icon: <BookOpen className="h-4 w-4" />
     },
     {
-      title: "Profile",
-      href: "/dashboard/profile",
-      icon: <UserCircle className="h-4 w-4" />
-    },
-    {
       title: "Settings",
       href: "/dashboard/settings",
       icon: <Settings className="h-4 w-4" />
@@ -125,12 +120,12 @@ export function DashboardNav({ collapsed, setCollapsed }: {
                   className={cn(
                     "flex items-center gap-3 rounded-md px-2.5 py-2 text-sm font-medium transition-all",
                     collapsed ? "justify-center" : "",
-                    pathname === link.href || pathname.startsWith(`${link.href}/`)
+                    (link.href === "/dashboard" ? pathname === link.href : pathname === link.href || pathname.startsWith(`${link.href}/`))
                       ? "bg-primary/10 text-primary dark:bg-primary/15"
                       : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
                   )}
                 >
-                  <div className={pathname === link.href || pathname.startsWith(`${link.href}/`) ? "text-primary" : ""}>
+                  <div className={(link.href === "/dashboard" ? pathname === link.href : pathname === link.href || pathname.startsWith(`${link.href}/`)) ? "text-primary" : ""}>
                     {link.icon}
                   </div>
                   {!collapsed && (

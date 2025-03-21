@@ -4,18 +4,35 @@ import React, { createContext, useContext, useState, ReactNode } from 'react';
 
 export type AccountType = 'real' | 'demo' | 'prop-firm-challenge' | 'prop-firm-real';
 export type RiskPlanType = 'dynamic' | 'fixed' | 'custom';
+export type MaxLossType = 'fixed' | 'percentage' | 'trailing';
 
 interface TradingAccount {
-  initialBalance: number;
-  currentBalance: number;
-  accountType: AccountType;
+  // Core fields
+  id?: string;
+  accountName?: string;
+  accountSize: number;
+  balance: number; 
+  accountType: string;
+  broker?: string;
+  category?: string;
+  
+  // Risk management fields
+  maxLossLimit?: number;
+  maxLossType?: MaxLossType;
+  
   // Prop firm specific fields
+  type?: 'real' | 'demo';
+  variant?: 'passed' | 'challenge' | 'evaluation';
+  
+  // Legacy fields for backward compatibility
+  initialBalance?: number;
+  currentBalance?: number;
+  firmName?: string;
   maxLimitLoss?: number;
   maxDailyLoss?: number;
   personalDailyProfitTarget?: number;
   profitTargetToPass?: number;
   monthlyPersonalProfitTarget?: number;
-  firmName?: string;
 }
 
 interface TradingPlan {
@@ -31,6 +48,13 @@ interface OnboardingState {
   step: number;
   personalInfo: {
     fullName: string;
+    displayName?: string;
+    timezone?: string;
+    tradingExperience?: string;
+    tradingStyles?: string[];
+    bio?: string;
+    emailNotifications?: boolean;
+    marketAlerts?: boolean;
   };
   accounts: TradingAccount[];
   tradingPlan: TradingPlan;
@@ -51,6 +75,7 @@ const initialState: OnboardingState = {
   step: 1,
   personalInfo: {
     fullName: '',
+    emailNotifications: true,
   },
   accounts: [],
   tradingPlan: {
@@ -112,15 +137,13 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     switch (step) {
       case 1: // Personal Information
         return !!state.personalInfo.fullName;
-      case 2: // Trading Account Information
-        return state.accounts.length > 0;
-      case 3: // Trading Plan Concepts - skippable
+      case 2: // Trading Plan Concepts - skippable
         return true;
-      case 4: // Entry Rules - skippable
+      case 3: // Entry Rules - skippable
         return true;
-      case 5: // Risk Management - skippable
+      case 4: // Risk Management - skippable
         return true;
-      case 6: // Final Review
+      case 5: // Final Review
         return true;
       default:
         return true;

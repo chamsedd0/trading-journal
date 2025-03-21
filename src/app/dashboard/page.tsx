@@ -8,6 +8,7 @@ import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import Link from "next/link";
 import { toast } from "sonner";
+import { DashboardPageSkeleton } from '@/components/skeletons';
 
 import {
   AlertDialog,
@@ -451,6 +452,10 @@ export default function DashboardPage() {
         (t: any) => t.id !== trade.id
       );
       
+      // Update the account balance by removing the PnL from the deleted trade
+      const currentBalance = updatedAccounts[accountIndex].balance || 0;
+      updatedAccounts[accountIndex].balance = currentBalance - trade.pnl;
+      
       // Update the user document with the modified accounts array
       await updateDoc(userRef, {
         accounts: updatedAccounts
@@ -549,7 +554,7 @@ export default function DashboardPage() {
   };
 
   if (loading) {
-    return <div>Loading...</div>;
+    return <DashboardPageSkeleton />;
   }
 
   return (

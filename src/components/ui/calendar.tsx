@@ -2,10 +2,15 @@
 
 import * as React from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
-import { DayPicker } from "react-day-picker"
+import { DayPicker, type FormatterFn } from "react-day-picker"
 
 import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/button"
+
+// Custom formatter for weekday names
+const formatWeekdayName: FormatterFn = (weekday, options) => {
+  return weekday.toLocaleString(options?.locale || 'en-US', { weekday: 'short' }).toUpperCase();
+};
 
 function Calendar({
   className,
@@ -17,6 +22,7 @@ function Calendar({
     <DayPicker
       showOutsideDays={showOutsideDays}
       className={cn("p-3", className)}
+      formatters={{ formatWeekday: formatWeekdayName }}
       classNames={{
         months: "flex flex-col sm:flex-row gap-2",
         month: "flex flex-col gap-4",

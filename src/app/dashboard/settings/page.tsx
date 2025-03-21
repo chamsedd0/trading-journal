@@ -9,6 +9,7 @@ import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
+import { SettingsPageSkeleton } from "@/components/skeletons";
 
 interface Settings {
   darkMode: boolean;
@@ -90,7 +91,7 @@ export default function SettingsPage() {
   };
   
   if (loading) {
-    return <div>Loading...</div>;
+    return <SettingsPageSkeleton />;
   }
   
   return (

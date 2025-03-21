@@ -27,6 +27,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { TradesPageSkeleton } from '@/components/skeletons';
 
 interface Trade {
   id: string;
@@ -216,6 +217,10 @@ export default function TradesPage() {
         (t: any) => t.id !== trade.id
       );
       
+      // Update the account balance by removing the PnL from the deleted trade
+      const currentBalance = updatedAccounts[accountIndex].balance || 0;
+      updatedAccounts[accountIndex].balance = currentBalance - trade.pnl;
+      
       // Update the user document with the modified accounts array
       await updateDoc(userRef, {
         accounts: updatedAccounts
@@ -235,7 +240,7 @@ export default function TradesPage() {
   };
 
   if (loading) {
-    return <div className="flex items-center justify-center min-h-[60vh]">Loading...</div>;
+    return <TradesPageSkeleton />;
   }
 
   return (

@@ -3,6 +3,7 @@
 import { useAuth } from "@/lib/auth-context";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { LoginSkeleton } from "@/components/skeletons/login-skeleton";
 
 interface AuthGuardProps {
   children: React.ReactNode;
@@ -32,11 +33,7 @@ export default function AuthGuard({
 
   // Show nothing while loading or redirecting
   if (loading || (requireAuth && !user) || (requireAuth && user && requireSetup && user.profile?.setupComplete === false)) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <p>Loading...</p>
-      </div>
-    );
+    return <LoginSkeleton />;
   }
 
   // Show children if all conditions are met
