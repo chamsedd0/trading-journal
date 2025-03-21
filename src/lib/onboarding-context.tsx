@@ -40,6 +40,9 @@ interface TradingPlan {
   entryRules: string[];
   riskManagement: {
     planType: RiskPlanType;
+    riskPercentage: number;
+    reduceRiskAfterLoss: boolean;
+    targetRiskRewardRatio: number;
     customRules?: string[];
   };
 }
@@ -83,6 +86,9 @@ const initialState: OnboardingState = {
     entryRules: [],
     riskManagement: {
       planType: 'fixed',
+      riskPercentage: 1,
+      reduceRiskAfterLoss: false,
+      targetRiskRewardRatio: 2,
     },
   },
 };

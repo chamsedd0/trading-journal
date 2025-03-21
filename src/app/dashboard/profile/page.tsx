@@ -166,80 +166,89 @@ export default function ProfilePage() {
   
   return (
     <div className="space-y-8">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Your Profile</h1>
+      {/* Page header with title and save button */}
+      <div className="flex justify-between items-center bg-muted/20 p-6 rounded-lg shadow-sm mb-8">
+        <h1 className="text-3xl font-bold text-foreground/90">Your Profile</h1>
         <Button
           onClick={saveProfile}
           disabled={saving || !hasChanges}
+          variant="default"
+          className="px-6"
         >
           {saving ? 'Saving...' : 'Save Changes'}
         </Button>
       </div>
       
       {/* User Info Card */}
-      <Card className="shadow-sm">
-        <CardContent className="p-6">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-6">
-            {/* Profile picture */}
-            <div className="relative">
-              <div className={cn(
-                "h-24 w-24 rounded-full flex items-center justify-center bg-primary/10 text-primary font-semibold text-3xl overflow-hidden",
-                profile.photoURL && "border-2 border-primary/30"
-              )}>
-                {profile.photoURL ? (
-                  <img 
-                    src={profile.photoURL} 
-                    alt={profile.displayName} 
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  profile.displayName ? profile.displayName[0].toUpperCase() : "U"
+      <Card className="shadow-sm overflow-hidden">
+        <CardContent className="p-0">
+          <div className="bg-gradient-to-r from-primary/5 to-muted/20 p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-6">
+              {/* Profile picture */}
+              <div className="relative">
+                <div className={cn(
+                  "h-28 w-28 rounded-full flex items-center justify-center bg-primary/10 text-primary font-semibold text-3xl overflow-hidden ring-4 ring-background shadow-md",
+                  profile.photoURL && "border-2 border-primary/30"
+                )}>
+                  {profile.photoURL ? (
+                    <img 
+                      src={profile.photoURL} 
+                      alt={profile.displayName} 
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    profile.displayName ? profile.displayName[0].toUpperCase() : "U"
+                  )}
+                </div>
+                <div className="absolute -bottom-2 -right-2">
+                  <Button 
+                    variant="secondary" 
+                    size="icon" 
+                    className="h-8 w-8 rounded-full shadow-md"
+                    // This is just a placeholder - would need to implement actual image upload
+                    onClick={() => toast.info("Photo upload not implemented in this demo")}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2"></path>
+                      <rect x="8" y="2" width="13" height="13" rx="2" ry="2"></rect>
+                    </svg>
+                  </Button>
+                </div>
+              </div>
+              
+              {/* User details */}
+              <div className="space-y-2 flex-1">
+                <h2 className="text-2xl font-semibold">
+                  {profile.displayName || "Trader"}
+                </h2>
+                <div className="text-muted-foreground flex items-center gap-1">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="4" width="20" height="16" rx="2" />
+                    <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+                  </svg>
+                  {profile.email}
+                </div>
+                {profile.location && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path>
+                      <circle cx="12" cy="10" r="3"></circle>
+                    </svg>
+                    {profile.location}
+                  </div>
                 )}
               </div>
-              <div className="absolute -bottom-2 -right-2">
-                <Button 
-                  variant="secondary" 
-                  size="icon" 
-                  className="h-8 w-8 rounded-full shadow-sm"
-                  // This is just a placeholder - would need to implement actual image upload
-                  onClick={() => toast.info("Photo upload not implemented in this demo")}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2"></path>
-                    <rect x="8" y="2" width="13" height="13" rx="2" ry="2"></rect>
-                  </svg>
-                </Button>
-              </div>
-            </div>
-            
-            {/* User details */}
-            <div className="space-y-2 flex-1">
-              <h2 className="text-2xl font-semibold">
-                {profile.displayName || "Trader"}
-              </h2>
-              <div className="text-muted-foreground">
-                {profile.email}
-              </div>
-              {profile.location && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path>
-                    <circle cx="12" cy="10" r="3"></circle>
-                  </svg>
-                  {profile.location}
+              
+              {/* Stats */}
+              <div className="grid grid-cols-2 gap-8 mt-4 sm:mt-0 sm:border-l sm:pl-6 sm:border-muted">
+                <div className="bg-muted/20 p-3 rounded-lg text-center">
+                  <div className="text-sm text-muted-foreground">Total Trades</div>
+                  <div className="text-2xl font-semibold text-primary">{profile.totalTrades || 0}</div>
                 </div>
-              )}
-            </div>
-            
-            {/* Stats */}
-            <div className="grid grid-cols-2 gap-4 mt-4 sm:mt-0 sm:border-l sm:pl-6 sm:border-muted">
-              <div>
-                <div className="text-sm text-muted-foreground">Total Trades</div>
-                <div className="text-2xl font-semibold">{profile.totalTrades || 0}</div>
-              </div>
-              <div>
-                <div className="text-sm text-muted-foreground">Accounts</div>
-                <div className="text-2xl font-semibold">{profile.totalAccounts || 0}</div>
+                <div className="bg-muted/20 p-3 rounded-lg text-center">
+                  <div className="text-sm text-muted-foreground">Accounts</div>
+                  <div className="text-2xl font-semibold text-primary">{profile.totalAccounts || 0}</div>
+                </div>
               </div>
             </div>
           </div>
@@ -247,72 +256,76 @@ export default function ProfilePage() {
       </Card>
       
       {/* Profile Information */}
-      <Card className="shadow-sm">
-        <CardHeader>
+      <Card className="shadow-sm overflow-hidden">
+        <CardHeader className="bg-muted/30 border-b border-border/20 pb-4">
           <CardTitle>Profile Information</CardTitle>
           <CardDescription>
             Update your personal information and how others see you
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <CardContent className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {/* First column */}
-            <div className="space-y-6">
+            <div className="space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="displayName">Display Name</Label>
+                <Label htmlFor="displayName" className="font-medium">Display Name</Label>
                 <Input
                   id="displayName"
                   name="displayName"
                   value={profile.displayName}
                   onChange={handleInputChange}
+                  className="border-muted-foreground/20"
                 />
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="location">Location</Label>
+                <Label htmlFor="location" className="font-medium">Location</Label>
                 <Input
                   id="location"
                   name="location"
                   value={profile.location}
                   onChange={handleInputChange}
                   placeholder="City, Country"
+                  className="border-muted-foreground/20"
                 />
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="website">Website</Label>
+                <Label htmlFor="website" className="font-medium">Website</Label>
                 <Input
                   id="website"
                   name="website"
                   value={profile.website}
                   onChange={handleInputChange}
                   placeholder="https://example.com"
+                  className="border-muted-foreground/20"
                 />
               </div>
             </div>
             
             {/* Second column */}
-            <div className="space-y-6">
+            <div className="space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="bio">Bio</Label>
+                <Label htmlFor="bio" className="font-medium">Bio</Label>
                 <Textarea
                   id="bio"
                   name="bio"
                   value={profile.bio}
                   onChange={handleInputChange}
                   placeholder="Tell us about yourself and your trading journey"
-                  className="min-h-[120px]"
+                  className="min-h-[120px] border-muted-foreground/20 resize-none"
                 />
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="experience">Trading Experience</Label>
+                <Label htmlFor="experience" className="font-medium">Trading Experience</Label>
                 <Input
                   id="experience"
                   name="experience"
                   value={profile.experience}
                   onChange={handleInputChange}
                   placeholder="e.g. 3 years"
+                  className="border-muted-foreground/20"
                 />
               </div>
             </div>
@@ -321,50 +334,53 @@ export default function ProfilePage() {
       </Card>
       
       {/* Trading Preferences */}
-      <Card className="shadow-sm">
-        <CardHeader>
+      <Card className="shadow-sm overflow-hidden">
+        <CardHeader className="bg-muted/30 border-b border-border/20 pb-4">
           <CardTitle>Trading Preferences</CardTitle>
           <CardDescription>
             Customize your trading style and preferences
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <CardContent className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {/* First column */}
-            <div className="space-y-6">
+            <div className="space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="tradingStyle">Trading Style</Label>
+                <Label htmlFor="tradingStyle" className="font-medium">Trading Style</Label>
                 <Input
                   id="tradingStyle"
                   name="tradingStyle"
                   value={profile.tradingStyle}
                   onChange={handleInputChange}
                   placeholder="e.g. Swing Trading, Day Trading"
+                  className="border-muted-foreground/20"
                 />
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="riskTolerance">Risk Tolerance</Label>
+                <Label htmlFor="riskTolerance" className="font-medium">Risk Tolerance</Label>
                 <Input
                   id="riskTolerance"
                   name="riskTolerance"
                   value={profile.riskTolerance}
                   onChange={handleInputChange}
                   placeholder="e.g. Conservative, Moderate, Aggressive"
+                  className="border-muted-foreground/20"
                 />
               </div>
             </div>
             
             {/* Second column */}
-            <div className="space-y-6">
+            <div className="space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="timeZone">Time Zone</Label>
+                <Label htmlFor="timeZone" className="font-medium">Time Zone</Label>
                 <Input
                   id="timeZone"
                   name="timeZone"
                   value={profile.timeZone}
                   onChange={handleInputChange}
                   placeholder="e.g. EST, GMT+1"
+                  className="border-muted-foreground/20"
                 />
               </div>
             </div>
@@ -373,107 +389,125 @@ export default function ProfilePage() {
       </Card>
       
       {/* Privacy & Notifications */}
-      <Card className="shadow-sm">
-        <CardHeader>
+      <Card className="shadow-sm overflow-hidden">
+        <CardHeader className="bg-muted/30 border-b border-border/20 pb-4">
           <CardTitle>Privacy & Notifications</CardTitle>
           <CardDescription>
             Manage your privacy settings and notification preferences
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-y-6">
-            <div className="flex items-center justify-between space-x-2">
-              <div className="space-y-0.5">
-                <Label htmlFor="publicProfile">Public Profile</Label>
-                <p className="text-sm text-muted-foreground">
-                  Make your profile visible to others
-                </p>
+        <CardContent className="p-0">
+          {/* Privacy Settings Group */}
+          <div className="p-6 border-b border-border/10">
+            <h3 className="text-md font-medium mb-4">Privacy Settings</h3>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-x-8 gap-y-5">
+              <div className="flex items-center justify-between gap-3 bg-muted/10 p-3 rounded-lg">
+                <div>
+                  <Label htmlFor="publicProfile" className="font-medium">Public Profile</Label>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Make your profile visible to others
+                  </p>
+                </div>
+                <Switch
+                  id="publicProfile"
+                  checked={profile.isPublicProfile}
+                  onCheckedChange={() => handleToggle('isPublicProfile')}
+                  className="data-[state=checked]:bg-primary"
+                />
               </div>
-              <Switch
-                id="publicProfile"
-                checked={profile.isPublicProfile}
-                onCheckedChange={() => handleToggle('isPublicProfile')}
-              />
+              
+              <div className="flex items-center justify-between gap-3 bg-muted/10 p-3 rounded-lg">
+                <div>
+                  <Label htmlFor="showPnL" className="font-medium">Show P&L</Label>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Show your profit and loss
+                  </p>
+                </div>
+                <Switch
+                  id="showPnL"
+                  checked={profile.showPnL}
+                  onCheckedChange={() => handleToggle('showPnL')}
+                  className="data-[state=checked]:bg-primary"
+                />
+              </div>
+              
+              <div className="flex items-center justify-between gap-3 bg-muted/10 p-3 rounded-lg">
+                <div>
+                  <Label htmlFor="showStats" className="font-medium">Show Trading Stats</Label>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Show your trading statistics
+                  </p>
+                </div>
+                <Switch
+                  id="showStats"
+                  checked={profile.showTradingStats}
+                  onCheckedChange={() => handleToggle('showTradingStats')}
+                  className="data-[state=checked]:bg-primary"
+                />
+              </div>
             </div>
-            
-            <div className="flex items-center justify-between space-x-2">
-              <div className="space-y-0.5">
-                <Label htmlFor="showPnL">Show P&L</Label>
-                <p className="text-sm text-muted-foreground">
-                  Show your profit and loss
-                </p>
+          </div>
+          
+          {/* Notification Settings Group */}
+          <div className="p-6">
+            <h3 className="text-md font-medium mb-4">Notification Preferences</h3>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-x-8 gap-y-5">
+              <div className="flex items-center justify-between gap-3 bg-muted/10 p-3 rounded-lg">
+                <div>
+                  <Label htmlFor="weeklySummary" className="font-medium">Weekly Summary</Label>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Receive weekly trading summary
+                  </p>
+                </div>
+                <Switch
+                  id="weeklySummary"
+                  checked={profile.receiveWeeklySummary}
+                  onCheckedChange={() => handleToggle('receiveWeeklySummary')}
+                  className="data-[state=checked]:bg-primary"
+                />
               </div>
-              <Switch
-                id="showPnL"
-                checked={profile.showPnL}
-                onCheckedChange={() => handleToggle('showPnL')}
-              />
-            </div>
-            
-            <div className="flex items-center justify-between space-x-2">
-              <div className="space-y-0.5">
-                <Label htmlFor="showStats">Show Trading Stats</Label>
-                <p className="text-sm text-muted-foreground">
-                  Show your trading statistics
-                </p>
+              
+              <div className="flex items-center justify-between gap-3 bg-muted/10 p-3 rounded-lg">
+                <div>
+                  <Label htmlFor="tradeReminders" className="font-medium">Trade Reminders</Label>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Get daily trade journal reminders
+                  </p>
+                </div>
+                <Switch
+                  id="tradeReminders"
+                  checked={profile.dailyTradeReminders}
+                  onCheckedChange={() => handleToggle('dailyTradeReminders')}
+                  className="data-[state=checked]:bg-primary"
+                />
               </div>
-              <Switch
-                id="showStats"
-                checked={profile.showTradingStats}
-                onCheckedChange={() => handleToggle('showTradingStats')}
-              />
-            </div>
-            
-            <div className="flex items-center justify-between space-x-2">
-              <div className="space-y-0.5">
-                <Label htmlFor="weeklySummary">Weekly Summary</Label>
-                <p className="text-sm text-muted-foreground">
-                  Receive weekly trading summary
-                </p>
+              
+              <div className="flex items-center justify-between gap-3 bg-muted/10 p-3 rounded-lg">
+                <div>
+                  <Label htmlFor="marketAlerts" className="font-medium">Market Alerts</Label>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Receive market movement alerts
+                  </p>
+                </div>
+                <Switch
+                  id="marketAlerts"
+                  checked={profile.marketAlerts}
+                  onCheckedChange={() => handleToggle('marketAlerts')}
+                  className="data-[state=checked]:bg-primary"
+                />
               </div>
-              <Switch
-                id="weeklySummary"
-                checked={profile.receiveWeeklySummary}
-                onCheckedChange={() => handleToggle('receiveWeeklySummary')}
-              />
-            </div>
-            
-            <div className="flex items-center justify-between space-x-2">
-              <div className="space-y-0.5">
-                <Label htmlFor="tradeReminders">Trade Reminders</Label>
-                <p className="text-sm text-muted-foreground">
-                  Get daily trade journal reminders
-                </p>
-              </div>
-              <Switch
-                id="tradeReminders"
-                checked={profile.dailyTradeReminders}
-                onCheckedChange={() => handleToggle('dailyTradeReminders')}
-              />
-            </div>
-            
-            <div className="flex items-center justify-between space-x-2">
-              <div className="space-y-0.5">
-                <Label htmlFor="marketAlerts">Market Alerts</Label>
-                <p className="text-sm text-muted-foreground">
-                  Receive market movement alerts
-                </p>
-              </div>
-              <Switch
-                id="marketAlerts"
-                checked={profile.marketAlerts}
-                onCheckedChange={() => handleToggle('marketAlerts')}
-              />
             </div>
           </div>
         </CardContent>
       </Card>
       
-      <div className="flex justify-end">
+      {/* Bottom save button */}
+      <div className="flex justify-end mt-8">
         <Button
           onClick={saveProfile}
           disabled={saving || !hasChanges}
-          className="px-6"
+          className="px-8"
+          size="lg"
         >
           {saving ? 'Saving...' : 'Save Changes'}
         </Button>
