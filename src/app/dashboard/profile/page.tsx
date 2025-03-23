@@ -148,6 +148,10 @@ export default function ProfilePage() {
         receiveWeeklySummary: profile.receiveWeeklySummary,
         dailyTradeReminders: profile.dailyTradeReminders,
         marketAlerts: profile.marketAlerts,
+        socialPrivacy: {
+          showPnL: profile.showPnL,
+          showTradingStats: profile.showTradingStats
+        }
       });
       
       toast.success('Profile updated successfully');
@@ -496,6 +500,58 @@ export default function ProfilePage() {
                   className="data-[state=checked]:bg-primary"
                 />
               </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+      
+      {/* Social & Privacy Card */}
+      <Card className="shadow-sm overflow-hidden">
+        <CardHeader className="bg-muted/30 border-b border-border/20 pb-4">
+          <CardTitle>Social & Privacy Settings</CardTitle>
+          <CardDescription>
+            Control how your profile appears to other traders
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-6">
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label className="text-base">Public Profile</Label>
+                <p className="text-sm text-muted-foreground">
+                  Allow other traders to find and connect with you
+                </p>
+              </div>
+              <Switch
+                checked={profile.isPublicProfile}
+                onCheckedChange={() => handleToggle('isPublicProfile')}
+              />
+            </div>
+            
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label className="text-base">Show P&L</Label>
+                <p className="text-sm text-muted-foreground">
+                  Allow connected traders to see your P&L data
+                </p>
+              </div>
+              <Switch
+                checked={profile.showPnL}
+                onCheckedChange={() => handleToggle('showPnL')}
+              />
+            </div>
+            
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label className="text-base">Show Trading Stats</Label>
+                <p className="text-sm text-muted-foreground">
+                  Allow connected traders to see your trading statistics
+                </p>
+              </div>
+              <Switch
+                checked={profile.showTradingStats}
+                onCheckedChange={() => handleToggle('showTradingStats')}
+              />
             </div>
           </div>
         </CardContent>

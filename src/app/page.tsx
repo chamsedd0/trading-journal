@@ -202,16 +202,9 @@ export default function Home() {
                             <div className="flex items-center justify-between text-sm">
                               <div className="flex items-center gap-2">
                                 <div className="w-2 h-2 rounded-full bg-green-500" />
-                                <span className="text-muted-foreground">Prop Firm</span>
+                                <span className="text-muted-foreground">Prop Firm Account</span>
                               </div>
                               <span>$42,123.45</span>
-                            </div>
-                            <div className="flex items-center justify-between text-sm">
-                              <div className="flex items-center gap-2">
-                                <div className="w-2 h-2 rounded-full bg-yellow-500" />
-                                <span className="text-muted-foreground">Demo Account</span>
-                              </div>
-                              <span>$7,209.88</span>
                             </div>
                           </div>
                           <div className="mt-3 pt-3 border-t border-border/50">

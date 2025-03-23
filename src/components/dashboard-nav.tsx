@@ -15,7 +15,8 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
-  Home
+  Home,
+  Users
 } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
@@ -61,6 +62,11 @@ export function DashboardNav({ collapsed, setCollapsed }: {
       title: "Journal",
       href: "/dashboard/journal",
       icon: <BookOpen className="h-4 w-4" />
+    },
+    {
+      title: "Traders",
+      href: "/dashboard/traders",
+      icon: <Users className="h-4 w-4" />
     },
     {
       title: "Settings",

@@ -54,6 +54,14 @@ export interface UserProfile {
   setupComplete: boolean;
   accounts?: TradingAccount[];
   tradingPlan?: TradingPlan;
+  connections?: string[];
+  pendingConnections?: string[];
+  outgoingRequests?: string[];
+  isPublicProfile?: boolean;
+  socialPrivacy?: {
+    showPnL?: boolean;
+    showTradingStats?: boolean;
+  };
 }
 
 interface AuthUser extends User {
@@ -72,6 +80,11 @@ interface AuthContextType {
   updateAccount: (accountId: string, data: Partial<TradingAccount>) => Promise<void>;
   completeSetup: () => Promise<void>;
   refreshAuthState: () => Promise<void>;
+  updateConnectionState: (updates: {
+    connections?: string[],
+    pendingConnections?: string[],
+    outgoingRequests?: string[]
+  }) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -455,28 +468,68 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const refreshAuthState = async () => {
-    if (!auth.currentUser) return;
+    if (!user) return;
     
     try {
-      setLoading(true);
-      
-      // Get the current user document
-      const userDoc = await getDoc(doc(db, "users", auth.currentUser.uid));
+      // Get user document from Firestore
+      const userDoc = await getDoc(doc(db, "users", user.uid));
       
       if (userDoc.exists()) {
-        // Combine auth user with updated data from Firestore
-        const userData = userDoc.data() as UserProfile;
+        // Combine auth user with additional data from Firestore
+        const userData = userDoc.data();
         const enhancedUser = {
-          ...auth.currentUser,
-          profile: userData
+          ...user,
+          profile: {
+            ...user.profile,
+            fullName: userData.fullName,
+            setupStep: userData.setupStep,
+            setupComplete: userData.setupComplete,
+            accounts: userData.accounts || [],
+            tradingPlan: userData.tradingPlan,
+            connections: userData.connections || [],
+            pendingConnections: userData.pendingConnections || [],
+            outgoingRequests: userData.outgoingRequests || [],
+            isPublicProfile: userData.isPublicProfile,
+            socialPrivacy: userData.socialPrivacy || {
+              showPnL: true,
+              showTradingStats: true
+            }
+          }
         };
-        setUser(enhancedUser as AuthUser);
+        setUser(enhancedUser);
       }
     } catch (error) {
       console.error("Error refreshing auth state", error);
-    } finally {
-      setLoading(false);
     }
+  };
+
+  // Add new function for updating connection state
+  const updateConnectionState = (updates: {
+    connections?: string[],
+    pendingConnections?: string[],
+    outgoingRequests?: string[]
+  }) => {
+    if (!user) return;
+    
+    setUser(prev => {
+      if (!prev) return null;
+      
+      return {
+        ...prev,
+        profile: {
+          ...prev.profile,
+          connections: updates.connections !== undefined ? 
+            updates.connections : 
+            prev.profile?.connections || [],
+          pendingConnections: updates.pendingConnections !== undefined ? 
+            updates.pendingConnections : 
+            prev.profile?.pendingConnections || [],
+          outgoingRequests: updates.outgoingRequests !== undefined ? 
+            updates.outgoingRequests : 
+            prev.profile?.outgoingRequests || []
+        } as UserProfile
+      };
+    });
   };
 
   return (
@@ -492,7 +545,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         addAccount,
         updateAccount,
         completeSetup,
-        refreshAuthState
+        refreshAuthState,
+        updateConnectionState
       }}
     >
       {children}
