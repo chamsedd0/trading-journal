@@ -51,6 +51,7 @@ import {
   Mail,
   AtSign,
   LineChart as LineChartIcon,
+  ArrowLeft,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -634,6 +635,11 @@ export default function TraderProfilePage() {
     }
   };
   
+  // Function to handle navigating back to the traders search page
+  const handleGoBack = () => {
+    router.push('/dashboard/traders');
+  };
+  
   if (loading) {
     return (
       <div className="container max-w-screen-xl py-6 space-y-6">
@@ -674,6 +680,19 @@ export default function TraderProfilePage() {
   
   return (
     <div className="container max-w-screen-xl py-6 space-y-6">
+      {/* Back button */}
+      <div className="mb-6">
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          className="flex items-center text-muted-foreground hover:text-foreground"
+          onClick={handleGoBack}
+        >
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to Traders
+        </Button>
+      </div>
+
       {/* Profile Header */}
       <Card className="border-none shadow-md overflow-hidden">
         <CardHeader className="relative pb-4 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent">

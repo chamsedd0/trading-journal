@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useAuth, updateUserProfile } from '@/lib/auth-context';
+import { useState, useEffect, useCallback } from 'react';
+import { useAuth } from '@/lib/auth-context';
 import { collection, query, where, getDocs, doc, getDoc, updateDoc, arrayUnion, arrayRemove, serverTimestamp, addDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { 
@@ -24,6 +24,19 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
+// Define types for our component
+interface ExtendedUser {
+  uid: string;
+  displayName?: string;
+  email?: string;
+  photoURL?: string;
+  following?: string[];
+  followers?: string[];
+  pendingRequests?: string[];
+  connectionRequests?: string[];
+  tradingStyle?: string;
+}
+
 interface TraderProfile {
   uid: string;
   displayName: string;
@@ -45,7 +58,7 @@ interface TraderProfile {
 }
 
 export default function TradersPage() {
-  const { user, updateUserProfile } = useAuth();
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [traders, setTraders] = useState<TraderProfile[]>([]);
   const [filteredTraders, setFilteredTraders] = useState<TraderProfile[]>([]);
@@ -53,17 +66,41 @@ export default function TradersPage() {
   const [loading, setLoading] = useState(true);
   const [userProfile, setUserProfile] = useState<TraderProfile | null>(null);
   const [activeTab, setActiveTab] = useState('discover');
+  const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const router = useRouter();
+
+  // Cast the user to our extended type
+  const extendedUser = user as unknown as ExtendedUser | null;
+
+  // Add a state to track if stats need updating
+  const [statsNeedUpdate, setStatsNeedUpdate] = useState(false);
+
+  // Define updateUserProfile function
+  const updateUserProfile = async (userData: Partial<ExtendedUser>) => {
+    if (!extendedUser) return;
+    
+    try {
+      // Update user document in Firestore
+      await updateDoc(doc(db, "users", extendedUser.uid), userData);
+      
+      // Merge the updates with the local user state
+      Object.assign(extendedUser, userData);
+      
+    } catch (error) {
+      console.error('Error updating user profile:', error);
+      toast.error('Failed to update user profile');
+    }
+  };
 
   useEffect(() => {
     const fetchUserProfile = async () => {
-      if (!user) return;
+      if (!extendedUser) return;
       
       try {
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        const userDoc = await getDoc(doc(db, 'users', extendedUser.uid));
         if (userDoc.exists()) {
           setUserProfile({
-            uid: user.uid,
+            uid: extendedUser.uid,
             ...userDoc.data() as Omit<TraderProfile, 'uid'>
           });
         }
@@ -73,48 +110,46 @@ export default function TradersPage() {
     };
     
     fetchUserProfile();
-  }, [user]);
+  }, [extendedUser]);
 
-  useEffect(() => {
-    const fetchTraders = async () => {
+  // Define fetchTraders with useCallback outside of useEffect
+  const fetchTraders = useCallback(async () => {
+    if (!extendedUser) return;
+    
+    try {
       setLoading(true);
       
-      try {
-        if (!user) {
-          setLoading(false);
-          return;
-        }
-
-        const tradersRef = collection(db, 'users');
-        const q = query(
-          tradersRef,
-          where('isPublicProfile', '==', true)
-        );
-        
-        // Get all of the user's connections to accurately determine connection status
+      // Fetch all users except current user
+      const usersSnapshot = await getDocs(query(
+        collection(db, "users"),
+        where("uid", "!=", extendedUser.uid)
+      ));
+      
+      // Only fetch connections if stats need updating or it's the first load
+      if (statsNeedUpdate || traders.length === 0) {
+        // Fetch current user's connections
         const connectionsRef = collection(db, "connections");
         const userConnectionsQuery = query(
           connectionsRef,
-          where("userId", "==", user.uid)
+          where("userId", "==", extendedUser.uid)
         );
         
         const connectionRequestsQuery = query(
           collection(db, "connectionRequests"),
-          where("fromUid", "==", user.uid),
+          where("fromUid", "==", extendedUser.uid),
           where("status", "==", "pending")
         );
         
         const receivedRequestsQuery = query(
           collection(db, "connectionRequests"),
-          where("toUid", "==", user.uid),
+          where("toUid", "==", extendedUser.uid),
           where("status", "==", "pending")
         );
         
-        const [connectionsSnapshot, pendingSnapshot, requestsSnapshot, querySnapshot] = await Promise.all([
+        const [connectionsSnapshot, pendingSnapshot, requestsSnapshot] = await Promise.all([
           getDocs(userConnectionsQuery),
           getDocs(connectionRequestsQuery),
-          getDocs(receivedRequestsQuery),
-          getDocs(q)
+          getDocs(receivedRequestsQuery)
         ]);
         
         // Extract user's connections
@@ -126,60 +161,80 @@ export default function TradersPage() {
         // Extract received requests
         const connectionRequests = requestsSnapshot.docs.map(doc => doc.data().fromUid);
         
-        const tradersData = querySnapshot.docs
-          .map(doc => {
-            const data = doc.data();
-            // Skip the current user
-            if (data.uid === user.uid) return null;
-            
-            // Create trader profile
-            const trader: TraderProfile = {
-              uid: data.uid,
-              displayName: data.displayName || 'Anonymous Trader',
-              email: data.email || '',
-              photoURL: data.photoURL || '',
-              bio: data.bio || '',
-              tradingStyle: data.tradingStyle || '',
-              experience: data.experience || '',
-              followers: data.followers || [],
-              following: data.following || [],
-              totalTrades: data.totalTrades || 0,
-              winRate: data.winRate || 0,
-              tradingPlan: data.tradingPlan || { concepts: [], entryRules: [], riskManagement: {} },
-            };
-            
-            // Set connection status using the connection collection results
-            if (connections.includes(trader.uid)) {
-              trader.connectionStatus = 'connected';
-            } else if (pendingRequests.includes(trader.uid)) {
-              trader.connectionStatus = 'pending';
-            } else if (connectionRequests.includes(trader.uid)) {
-              trader.connectionStatus = 'request';
-            } else {
-              trader.connectionStatus = 'none';
-            }
-            
-            return trader;
-          })
-          .filter(Boolean) as TraderProfile[];
+        // Update user object with connection data if needed
+        if (extendedUser) {
+          updateUserProfile({
+            following: connections,
+            pendingRequests: pendingRequests,
+            connectionRequests: connectionRequests
+          });
+        }
         
-        // Sort traders by follower count
-        tradersData.sort((a, b) => 
-          (b.followers?.length || 0) - (a.followers?.length || 0)
-        );
-        
-        setTraders(tradersData);
-        applyFilters(tradersData, searchQuery, activeFilter);
-        setLoading(false);
-      } catch (error) {
-        console.error('Error fetching traders:', error);
-        toast.error('Failed to load traders');
-        setLoading(false);
+        // Reset the stats update flag
+        setStatsNeedUpdate(false);
       }
-    };
-    
+      
+      // Get the latest connection data from user object
+      const connections = extendedUser?.following || [];
+      const pendingRequests = extendedUser?.pendingRequests || [];
+      const connectionRequests = extendedUser?.connectionRequests || [];
+      
+      // Process the traders data
+      const tradersData = usersSnapshot.docs.map(doc => {
+        const data = doc.data();
+        // Skip the current user
+        if (data.uid === extendedUser.uid) return null;
+        
+        // Create trader profile
+        const trader: TraderProfile = {
+          uid: data.uid,
+          displayName: data.displayName || 'Anonymous Trader',
+          email: data.email || '',
+          photoURL: data.photoURL || '',
+          bio: data.bio || '',
+          tradingStyle: data.tradingStyle || '',
+          experience: data.experience || '',
+          followers: data.followers || [],
+          following: data.following || [],
+          totalTrades: data.totalTrades || 0,
+          winRate: data.winRate || 0,
+          tradingPlan: data.tradingPlan || { concepts: [], entryRules: [], riskManagement: {} },
+        };
+        
+        // Set connection status using the connection collection results
+        if (connections.includes(trader.uid)) {
+          trader.connectionStatus = 'connected';
+        } else if (pendingRequests.includes(trader.uid)) {
+          trader.connectionStatus = 'pending';
+        } else if (connectionRequests.includes(trader.uid)) {
+          trader.connectionStatus = 'request';
+        } else {
+          trader.connectionStatus = 'none';
+        }
+        
+        return trader;
+      })
+      .filter(Boolean) as TraderProfile[];
+      
+      // Sort traders by follower count
+      tradersData.sort((a, b) => 
+        (b.followers?.length || 0) - (a.followers?.length || 0)
+      );
+      
+      setTraders(tradersData);
+      applyFilters(tradersData, searchQuery, activeFilter);
+    } catch (error) {
+      console.error('Error fetching traders:', error);
+      toast.error('Failed to load traders');
+    } finally {
+      setLoading(false);
+    }
+  }, [extendedUser, statsNeedUpdate, traders.length, searchQuery, activeFilter]);
+
+  // Use fetchTraders in useEffect
+  useEffect(() => {
     fetchTraders();
-  }, [user]);
+  }, [fetchTraders]);
 
   useEffect(() => {
     if (traders.length > 0) {
@@ -188,7 +243,7 @@ export default function TradersPage() {
   }, [searchQuery, activeFilter, traders]);
 
   const getConnectionStatus = (traderId: string): 'none' | 'pending' | 'request' | 'connected' => {
-    if (!user) return 'none';
+    if (!extendedUser) return 'none';
     
     // First check the local state of traders for the most up-to-date status
     const trader = traders.find(t => t.uid === traderId);
@@ -235,7 +290,7 @@ export default function TradersPage() {
           break;
         case 'similar':
           filtered = filtered.filter(trader => 
-            trader.tradingStyle === user?.tradingStyle
+            trader.tradingStyle === extendedUser?.tradingStyle
           );
           break;
         case 'day':
@@ -272,12 +327,13 @@ export default function TradersPage() {
   };
 
   const handleSendRequest = async (traderId: string) => {
-    if (!user) return;
+    if (!extendedUser) return;
     
     try {
+      setLoadingAction(traderId);
       // Create a connection request in the connectionRequests collection
       await addDoc(collection(db, "connectionRequests"), {
-        fromUid: user.uid,
+        fromUid: extendedUser.uid,
         toUid: traderId,
         status: "pending",
         createdAt: serverTimestamp(),
@@ -303,22 +359,27 @@ export default function TradersPage() {
       );
       
       toast.success('Connection request sent');
+      
+      setStatsNeedUpdate(true); // Mark that stats need updating
     } catch (error) {
       console.error('Error sending connection request:', error);
       toast.error('Failed to send connection request');
+    } finally {
+      setLoadingAction(null);
     }
   };
 
   const handleAcceptRequest = async (traderId: string) => {
-    if (!user) return;
+    if (!extendedUser) return;
     
     try {
+      setLoadingAction(traderId);
       // Find the connection request
       const requestsRef = collection(db, "connectionRequests");
       const q = query(
         requestsRef, 
         where("fromUid", "==", traderId),
-        where("toUid", "==", user.uid),
+        where("toUid", "==", extendedUser.uid),
         where("status", "==", "pending")
       );
       
@@ -339,14 +400,14 @@ export default function TradersPage() {
       await Promise.all([
         // Add trader to user's connections
         addDoc(collection(db, "connections"), {
-          userId: user.uid,
+          userId: extendedUser.uid,
           connectedUserId: traderId,
           createdAt: serverTimestamp()
         }),
         // Add user to trader's connections
         addDoc(collection(db, "connections"), {
           userId: traderId,
-          connectedUserId: user.uid,
+          connectedUserId: extendedUser.uid,
           createdAt: serverTimestamp()
         }),
       ]);
@@ -371,18 +432,23 @@ export default function TradersPage() {
       );
       
       toast.success('Connection request accepted');
+      
+      setStatsNeedUpdate(true); // Mark that stats need updating
     } catch (error) {
       console.error('Error accepting connection request:', error);
       toast.error('Failed to accept request');
+    } finally {
+      setLoadingAction(null);
     }
   };
 
   const handleRejectRequest = async (traderId: string) => {
-    if (!user) return;
+    if (!extendedUser) return;
     
     try {
+      setLoadingAction(traderId);
       // Remove from connection requests
-      const connectionRequests = (user.connectionRequests || []).filter(id => id !== traderId);
+      const connectionRequests = (extendedUser.connectionRequests || []).filter((id: string) => id !== traderId);
       
       await updateUserProfile({ connectionRequests });
       
@@ -406,29 +472,34 @@ export default function TradersPage() {
       );
       
       toast.success('Connection request rejected');
+      
+      setStatsNeedUpdate(true); // Mark that stats need updating
     } catch (error) {
       console.error('Error rejecting connection request:', error);
       toast.error('Failed to reject request');
+    } finally {
+      setLoadingAction(null);
     }
   };
 
   const handleRemoveConnection = async (traderId: string) => {
-    if (!user) return;
+    if (!extendedUser) return;
     
     try {
+      setLoadingAction(traderId);
       // Find and delete connections between the users
       const connectionsRef = collection(db, "connections");
       
       const userConnectionQuery = query(
         connectionsRef,
-        where("userId", "==", user.uid),
+        where("userId", "==", extendedUser.uid),
         where("connectedUserId", "==", traderId)
       );
       
       const traderConnectionQuery = query(
         connectionsRef,
         where("userId", "==", traderId),
-        where("connectedUserId", "==", user.uid)
+        where("connectedUserId", "==", extendedUser.uid)
       );
       
       const [userConnectionSnapshot, traderConnectionSnapshot] = await Promise.all([
@@ -468,99 +539,126 @@ export default function TradersPage() {
       );
       
       toast.success('Connection removed');
+      
+      setStatsNeedUpdate(true); // Mark that stats need updating
     } catch (error) {
       console.error('Error removing connection:', error);
       toast.error('Failed to remove connection');
+    } finally {
+      setLoadingAction(null);
     }
   };
 
   const renderTraderCard = (trader: TraderProfile) => {
     return (
-      <Card key={trader.uid} className="overflow-hidden border-border hover:border-primary/20 transition-all">
-        <CardHeader className="p-4 pb-2 flex flex-row items-center gap-3">
-          <Avatar className="h-12 w-12 border border-border">
-            <AvatarImage src={trader.photoURL} alt={trader.displayName} />
-            <AvatarFallback className="bg-muted">
-              {trader.displayName.charAt(0)}
-            </AvatarFallback>
-          </Avatar>
-          <div className="space-y-0.5 flex-1 min-w-0">
-            <div className="font-semibold text-foreground truncate">
-              {trader.displayName}
+      <Card key={trader.uid} className="overflow-hidden hover:shadow-md transition-shadow border-0 bg-card/50 backdrop-blur-sm">
+        <div className="p-4">
+          <div className="flex items-center gap-3 mb-3">
+            <Avatar className="h-12 w-12 border-2 border-primary/20 shrink-0">
+              <AvatarImage src={trader.photoURL} alt={trader.displayName} />
+              <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+                {trader.displayName.charAt(0)}
+              </AvatarFallback>
+            </Avatar>
+            <div className="min-w-0 flex-1">
+              <Link 
+                href={`/dashboard/traders/${trader.uid}`} 
+                className="font-medium text-base hover:text-primary transition-colors truncate block"
+                title={trader.displayName}
+              >
+                {trader.displayName}
+              </Link>
+              <div className="text-xs text-muted-foreground truncate flex items-center mt-1">
+                <Users className="h-3 w-3 mr-1 shrink-0" /> 
+                {trader.followers?.length || 0} followers
+              </div>
             </div>
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Users className="h-3 w-3" /> 
-              <span className="truncate">{trader.followers?.length || 0} followers</span>
+            <div>
+              <Badge variant="outline" className="text-xs font-normal px-2">
+                {trader.tradingStyle || "Trader"}
+              </Badge>
             </div>
           </div>
-          <Badge variant="outline" className="shrink-0 text-xs font-normal">
-            {trader.tradingStyle || "Trader"}
-          </Badge>
-        </CardHeader>
-        
-        <CardFooter className="p-4 pt-2 grid grid-cols-2 gap-2">
-          {trader.connectionStatus === 'connected' ? (
-            <>
-              <Button 
-                variant="outline" 
-                className="w-full h-9"
-                onClick={() => handleRemoveConnection(trader.uid)}
-              >
-                <CheckCircle className="h-3.5 w-3.5 mr-1.5" /> Connected
-              </Button>
-              <Button variant="secondary" className="w-full h-9" asChild>
-                <Link href={`/dashboard/traders/${trader.uid}`}>
-                  View Profile
+          
+          <div className="flex gap-2 mt-2">
+            {renderConnectionButton(trader)}
+            
+            {trader.connectionStatus === 'connected' && (
+              <Button variant="outline" size="icon" className="rounded-lg shrink-0" asChild>
+                <Link href={`/dashboard/messages?contact=${trader.uid}`}>
+                  <MessageSquare className="h-4 w-4" />
                 </Link>
               </Button>
-            </>
-          ) : trader.connectionStatus === 'pending' ? (
-            <>
-              <Button variant="outline" className="w-full h-9" disabled>
-                <Clock className="h-3.5 w-3.5 mr-1.5" /> Pending
-              </Button>
-              <Button variant="secondary" className="w-full h-9" asChild>
-                <Link href={`/dashboard/traders/${trader.uid}`}>
-                  View Profile
-                </Link>
-              </Button>
-            </>
-          ) : trader.connectionStatus === 'request' ? (
-            <>
-              <Button 
-                variant="default"
-                className="w-full h-9"
-                onClick={() => handleAcceptRequest(trader.uid)}
-              >
-                <Check className="h-3.5 w-3.5 mr-1.5" /> Accept
-              </Button>
-              <Button 
-                variant="outline" 
-                className="w-full h-9"
-                onClick={() => handleRejectRequest(trader.uid)}
-              >
-                <X className="h-3.5 w-3.5 mr-1.5" /> Reject
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button 
-                variant="outline" 
-                className="w-full h-9"
-                onClick={() => handleSendRequest(trader.uid)}
-              >
-                <UserPlus className="h-3.5 w-3.5 mr-1.5" /> Connect
-              </Button>
-              <Button variant="secondary" className="w-full h-9" asChild>
-                <Link href={`/dashboard/traders/${trader.uid}`}>
-                  View Profile
-                </Link>
-              </Button>
-            </>
-          )}
-        </CardFooter>
+            )}
+          </div>
+        </div>
       </Card>
     );
+  };
+
+  const renderConnectionButton = (trader: TraderProfile) => {
+    switch (trader.connectionStatus) {
+      case 'connected':
+        return (
+          <Button 
+            variant="outline" 
+            size="icon"
+            className="rounded-lg border-green-500/20 bg-green-500/5 hover:bg-red-500/5 hover:border-red-500/20 transition-colors group"
+            onClick={() => handleRemoveConnection(trader.uid)}
+            title="Connected - Click to disconnect"
+          >
+            <CheckCircle className="h-4 w-4 text-green-500 group-hover:hidden" />
+            <X className="h-4 w-4 text-red-500 hidden group-hover:block" />
+          </Button>
+        );
+      case 'pending':
+        return (
+          <Button 
+            variant="outline" 
+            size="icon"
+            className="rounded-lg"
+            disabled
+            title="Request pending"
+          >
+            <Clock className="h-4 w-4 text-muted-foreground" />
+          </Button>
+        );
+      case 'request':
+        return (
+          <div className="flex gap-2">
+            <Button 
+              variant="default" 
+              size="icon"
+              className="rounded-lg"
+              onClick={() => handleAcceptRequest(trader.uid)}
+              title="Accept request"
+            >
+              <Check className="h-4 w-4" />
+            </Button>
+            <Button 
+              variant="outline" 
+              size="icon"
+              className="rounded-lg"
+              onClick={() => handleRejectRequest(trader.uid)}
+              title="Reject request"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        );
+      default:
+        return (
+          <Button 
+            variant="outline" 
+            size="icon"
+            className="rounded-lg transition-colors hover:bg-primary/5"
+            onClick={() => handleSendRequest(trader.uid)}
+            title="Connect with this trader"
+          >
+            <UserPlus className="h-4 w-4" />
+          </Button>
+        );
+    }
   };
 
   if (loading) {
@@ -592,22 +690,22 @@ export default function TradersPage() {
           
           {/* Quick stats cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="bg-card rounded-lg p-3 text-center border border-border shadow-sm">
-              <div className="text-xs text-muted-foreground font-medium mb-1">Traders</div>
-              <div className="text-lg font-bold">{traders.length}</div>
+            <div className="bg-gradient-to-r from-blue-500/5 to-blue-500/10 rounded-lg p-3 text-center border border-blue-500/10">
+              <div className="text-muted-foreground text-xs mb-1">Traders</div>
+              <div className="text-xl font-bold text-primary/90">{traders.length}</div>
             </div>
-            <div className="bg-card rounded-lg p-3 text-center border border-border shadow-sm">
-              <div className="text-xs text-muted-foreground font-medium mb-1">Following</div>
-              <div className="text-lg font-bold">{user?.following?.length || 0}</div>
+            <div className="bg-gradient-to-r from-green-500/5 to-green-500/10 rounded-lg p-3 text-center border border-green-500/10">
+              <div className="text-muted-foreground text-xs mb-1">Following</div>
+              <div className="text-xl font-bold text-green-500">{extendedUser?.following?.length || 0}</div>
             </div>
-            <div className="bg-card rounded-lg p-3 text-center border border-border shadow-sm">
-              <div className="text-xs text-muted-foreground font-medium mb-1">Followers</div>
-              <div className="text-lg font-bold">{user?.followers?.length || 0}</div>
+            <div className="bg-gradient-to-r from-purple-500/5 to-purple-500/10 rounded-lg p-3 text-center border border-purple-500/10">
+              <div className="text-muted-foreground text-xs mb-1">Followers</div>
+              <div className="text-xl font-bold text-purple-500">{extendedUser?.followers?.length || 0}</div>
             </div>
-            <div className="bg-card rounded-lg p-3 text-center border border-border shadow-sm">
-              <div className="text-xs text-muted-foreground font-medium mb-1">Pending</div>
-              <div className="text-lg font-bold">
-                {(user?.pendingRequests?.length || 0) + (user?.connectionRequests?.length || 0)}
+            <div className="bg-gradient-to-r from-amber-500/5 to-amber-500/10 rounded-lg p-3 text-center border border-amber-500/10">
+              <div className="text-muted-foreground text-xs mb-1">Pending</div>
+              <div className="text-xl font-bold text-amber-500">
+                {(extendedUser?.pendingRequests?.length || 0) + (extendedUser?.connectionRequests?.length || 0)}
               </div>
             </div>
           </div>
@@ -620,14 +718,14 @@ export default function TradersPage() {
               placeholder="Search by name, trading style, or concepts..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 max-w-md bg-background"
+              className="pl-9 max-w-md bg-background/80 backdrop-blur-sm focus-visible:ring-primary/50"
             />
           </div>
           
           <div className="flex gap-2 items-center">
-            <span className="text-sm text-muted-foreground font-medium">Filter:</span>
+            <span className="text-sm text-muted-foreground">Filter:</span>
             <Select value={activeFilter} onValueChange={handleFilterChange}>
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="w-[180px] bg-background/80 backdrop-blur-sm focus-visible:ring-primary/50">
                 <SelectValue placeholder="Filter by" />
               </SelectTrigger>
               <SelectContent>
@@ -644,26 +742,26 @@ export default function TradersPage() {
         </div>
         
         {loading ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {[1, 2, 3, 4, 5, 6].map((i) => (
-              <Card key={i} className="overflow-hidden border border-border">
-                <CardHeader className="p-4 pb-2 flex flex-row items-center gap-3">
-                  <Skeleton className="h-12 w-12 rounded-full" />
-                  <div className="space-y-2 flex-1">
-                    <Skeleton className="h-4 w-40" />
-                    <Skeleton className="h-3 w-24" />
+              <Card key={i} className="overflow-hidden">
+                <CardHeader className="p-4">
+                  <div className="flex items-start gap-3">
+                    <Skeleton className="h-10 w-10 rounded-full" />
+                    <div className="space-y-2 flex-1">
+                      <Skeleton className="h-4 w-40" />
+                      <Skeleton className="h-3 w-24" />
+                    </div>
                   </div>
-                  <Skeleton className="h-5 w-16 shrink-0 rounded-full" />
                 </CardHeader>
-                <CardFooter className="p-4 pt-2 grid grid-cols-2 gap-2">
-                  <Skeleton className="h-9 w-full" />
+                <CardFooter className="p-4 pt-0">
                   <Skeleton className="h-9 w-full" />
                 </CardFooter>
               </Card>
             ))}
           </div>
         ) : filteredTraders.length === 0 ? (
-          <div className="text-center py-12 bg-muted/20 rounded-lg border border-border">
+          <div className="text-center py-12 bg-card/30 backdrop-blur-sm rounded-lg border border-border/50">
             <div className="h-20 w-20 mx-auto mb-4 bg-muted rounded-full flex items-center justify-center">
               <Users className="h-10 w-10 text-muted-foreground" />
             </div>
