@@ -91,7 +91,7 @@ export default function Home() {
       
       <main>
         {/* Hero Section */}
-        <section className="py-32 px-6 relative overflow-hidden min-h-[90vh] flex items-center">
+        <section className="pt-28 pb-32 px-6 relative overflow-hidden min-h-[90vh] flex items-center">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/20 via-background to-background" />
           <div className="absolute inset-0 bg-grid-white/[0.02]" />
           <div className="container mx-auto max-w-7xl relative">

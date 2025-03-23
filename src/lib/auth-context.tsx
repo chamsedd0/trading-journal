@@ -54,27 +54,6 @@ export interface UserProfile {
   setupComplete: boolean;
   accounts?: TradingAccount[];
   tradingPlan?: TradingPlan;
-  
-  // Social features
-  followers?: string[];
-  following?: string[];
-  connectionRequests?: string[];
-  pendingRequests?: string[];
-  
-  // Social media links
-  twitterHandle?: string;
-  instagramHandle?: string;
-  discordHandle?: string;
-  tradingViewUsername?: string;
-  allowMessagesFromNonConnections?: boolean;
-  
-  // Profile data
-  displayName?: string;
-  bio?: string;
-  location?: string;
-  experience?: string;
-  tradingStyle?: string;
-  isPublicProfile?: boolean;
 }
 
 interface AuthUser extends User {
@@ -89,7 +68,6 @@ interface AuthContextType {
   signInWithEmail: (email: string, password: string) => Promise<UserCredential>;
   logout: () => Promise<void>;
   updateProfile: (profile: Partial<UserProfile>) => Promise<void>;
-  updateUserProfile: (userData: any) => Promise<void>;
   addAccount: (account: Omit<TradingAccount, 'id' | 'createdAt' | 'updatedAt'>) => Promise<string>;
   updateAccount: (accountId: string, data: Partial<TradingAccount>) => Promise<void>;
   completeSetup: () => Promise<void>;
@@ -325,28 +303,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const updateUserProfile = async (userData: any) => {
-    if (!user) {
-      throw new Error("No user is signed in");
-    }
-    
-    try {
-      const userRef = doc(db, "users", user.uid);
-      
-      // Update the user document with the new data
-      await updateDoc(userRef, {
-        ...userData,
-        updatedAt: serverTimestamp()
-      });
-      
-      // Call refreshAuthState to update the user object in context
-      await refreshAuthState();
-    } catch (error) {
-      console.error("Error updating user profile", error);
-      throw error;
-    }
-  };
-
   const addAccount = async (account: Omit<TradingAccount, 'id' | 'createdAt' | 'updatedAt'>) => {
     if (!user) throw new Error("No authenticated user");
     
@@ -533,7 +489,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signInWithEmail,
         logout,
         updateProfile,
-        updateUserProfile,
         addAccount,
         updateAccount,
         completeSetup,
