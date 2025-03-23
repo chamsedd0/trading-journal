@@ -27,11 +27,43 @@ export function FinalReviewStep() {
       const db = (await import('@/lib/firebase')).db;
       const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
       
-      // Update user document directly to mark setup as complete
+      // Update user document directly to mark setup as complete and save all onboarding data
       await updateDoc(doc(db, "users", user.uid), {
+        // Setup status
         setupComplete: true,
         setupStep: 5,
-        updatedAt: serverTimestamp()
+        updatedAt: serverTimestamp(),
+        
+        // Save personal info - filter out undefined values
+        personalInfo: Object.fromEntries(
+          Object.entries({
+            fullName: state.personalInfo.fullName,
+            displayName: state.personalInfo.displayName || null,
+            timezone: state.personalInfo.timezone || null,
+            tradingExperience: state.personalInfo.tradingExperience || null,
+            tradingStyles: state.personalInfo.tradingStyles || null,
+            bio: state.personalInfo.bio || null,
+            emailNotifications: state.personalInfo.emailNotifications ?? true,
+            marketAlerts: state.personalInfo.marketAlerts ?? false
+          }).filter(([_, value]) => value !== undefined)
+        ),
+        
+        // Save trading plan data
+        tradingPlan: {
+          concepts: state.tradingPlan.concepts || [],
+          entryRules: state.tradingPlan.entryRules || [],
+          riskManagement: {
+            planType: state.tradingPlan.riskManagement.planType,
+            riskPercentage: state.tradingPlan.riskManagement.riskPercentage,
+            reduceRiskAfterLoss: state.tradingPlan.riskManagement.reduceRiskAfterLoss,
+            targetRiskRewardRatio: state.tradingPlan.riskManagement.targetRiskRewardRatio,
+            ...(state.tradingPlan.riskManagement.customRules ? 
+              { customRules: state.tradingPlan.riskManagement.customRules } : {})
+          }
+        },
+        
+        // Save accounts data if present
+        ...(state.accounts && state.accounts.length > 0 ? { accounts: state.accounts } : {})
       });
       
       // Force refresh the auth state

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/lib/auth-context';
-import { getDoc, doc } from 'firebase/firestore';
+import { getDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,7 +23,12 @@ import {
   DollarSign,
   PieChart,
   Layers,
-  Calendar as CalendarIcon
+  Calendar as CalendarIcon,
+  PlusCircle,
+  Save,
+  Edit,
+  X,
+  Trash
 } from 'lucide-react';
 import { 
   HoverCard,
@@ -33,6 +38,9 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Switch } from "@/components/ui/switch";
 
 interface Trade {
   id: string;
@@ -76,6 +84,18 @@ interface WeekData {
   winRate: number;
 }
 
+interface TradingPlan {
+  concepts: string[];
+  entryRules: string[];
+  riskManagement: {
+    planType: string;
+    riskPercentage: number;
+    reduceRiskAfterLoss: boolean;
+    targetRiskRewardRatio: number;
+    customRules?: string[];
+  };
+}
+
 export default function JournalPage() {
   const { user } = useAuth();
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -94,6 +114,12 @@ export default function JournalPage() {
   });
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
   const [selectedDayTrades, setSelectedDayTrades] = useState<Trade[]>([]);
+  const [tradingPlan, setTradingPlan] = useState<TradingPlan | null>(null);
+  const [isEditingPlan, setIsEditingPlan] = useState(false);
+  const [editingTradingPlan, setEditingTradingPlan] = useState<TradingPlan | null>(null);
+  const [newConcept, setNewConcept] = useState('');
+  const [newEntryRule, setNewEntryRule] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   // Function to get the first day of the month
   const getMonthStart = (date: Date) => {
@@ -179,6 +205,12 @@ export default function JournalPage() {
         const userData = userDoc.data();
         const userAccounts = userData.accounts || [];
         setAccounts(userAccounts);
+
+        // Extract the trading plan if it exists
+        if (userData.tradingPlan) {
+          setTradingPlan(userData.tradingPlan);
+          setEditingTradingPlan(JSON.parse(JSON.stringify(userData.tradingPlan))); // Deep copy for editing
+        }
 
         // Set default selected account type
         if (userAccounts.some((acc: any) => acc.type === 'real')) {
@@ -408,6 +440,98 @@ export default function JournalPage() {
       year: 'numeric', 
       month: 'long', 
       day: 'numeric' 
+    });
+  };
+
+  // Function to handle saving trading plan changes
+  const saveTradingPlan = async () => {
+    if (!user || !editingTradingPlan) return;
+    
+    try {
+      setIsSaving(true);
+      
+      await updateDoc(doc(db, 'users', user.uid), {
+        tradingPlan: editingTradingPlan,
+        updatedAt: serverTimestamp()
+      });
+      
+      setTradingPlan(editingTradingPlan);
+      setIsEditingPlan(false);
+      toast.success('Trading plan updated successfully');
+    } catch (error) {
+      console.error('Error updating trading plan:', error);
+      toast.error('Failed to update trading plan');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Function to handle canceling edits
+  const cancelEditing = () => {
+    if (tradingPlan) {
+      setEditingTradingPlan(JSON.parse(JSON.stringify(tradingPlan))); // Reset to original
+    }
+    setIsEditingPlan(false);
+  };
+
+  // Function to handle adding a new concept
+  const addConcept = () => {
+    if (!newConcept.trim() || !editingTradingPlan) return;
+    
+    setEditingTradingPlan({
+      ...editingTradingPlan,
+      concepts: [...(editingTradingPlan.concepts || []), newConcept.trim()]
+    });
+    setNewConcept('');
+  };
+
+  // Function to handle removing a concept
+  const removeConcept = (index: number) => {
+    if (!editingTradingPlan) return;
+    
+    const newConcepts = [...editingTradingPlan.concepts];
+    newConcepts.splice(index, 1);
+    
+    setEditingTradingPlan({
+      ...editingTradingPlan,
+      concepts: newConcepts
+    });
+  };
+
+  // Function to handle adding a new entry rule
+  const addEntryRule = () => {
+    if (!newEntryRule.trim() || !editingTradingPlan) return;
+    
+    setEditingTradingPlan({
+      ...editingTradingPlan,
+      entryRules: [...(editingTradingPlan.entryRules || []), newEntryRule.trim()]
+    });
+    setNewEntryRule('');
+  };
+
+  // Function to handle removing an entry rule
+  const removeEntryRule = (index: number) => {
+    if (!editingTradingPlan) return;
+    
+    const newEntryRules = [...editingTradingPlan.entryRules];
+    newEntryRules.splice(index, 1);
+    
+    setEditingTradingPlan({
+      ...editingTradingPlan,
+      entryRules: newEntryRules
+    });
+  };
+
+  // Function to update risk management settings
+  const updateRiskManagement = (field: string, value: any) => {
+    if (!editingTradingPlan) return;
+    
+    setEditingTradingPlan({
+      ...editingTradingPlan,
+      riskManagement: {
+        ...editingTradingPlan.riskManagement,
+        [field]: value
+      }
     });
   };
 
@@ -827,6 +951,284 @@ export default function JournalPage() {
           )}
         </div>
       </div>
+
+      {/* Trading Plan Card - Now full width and below everything */}
+      <Card className="bg-card border-muted-foreground/10 mt-6">
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-xl flex items-center gap-2">
+              <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
+                  <path d="M14 3v4a1 1 0 0 0 1 1h4"></path>
+                  <path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"></path>
+                  <line x1="9" y1="9" x2="10" y2="9"></line>
+                  <line x1="9" y1="13" x2="15" y2="13"></line>
+                  <line x1="9" y1="17" x2="15" y2="17"></line>
+                </svg>
+              </div>
+              Your Trading Plan
+            </CardTitle>
+            {isEditingPlan ? (
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={cancelEditing}
+                  className="h-8 px-2"
+                  disabled={isSaving}
+                >
+                  <X className="h-4 w-4 mr-1" /> Cancel
+                </Button>
+                <Button 
+                  variant="default" 
+                  size="sm" 
+                  onClick={saveTradingPlan}
+                  className="h-8 px-3"
+                  disabled={isSaving}
+                >
+                  {isSaving ? 'Saving...' : <><Save className="h-4 w-4 mr-1" /> Save</>}
+                </Button>
+              </div>
+            ) : (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setIsEditingPlan(true)}
+                className="h-8 px-3"
+              >
+                <Edit className="h-4 w-4 mr-1" /> Edit Plan
+              </Button>
+            )}
+          </div>
+          <CardDescription>
+            {isEditingPlan ? 'Edit your trading strategy to improve performance' : 'Reference your trading strategy while analyzing trades'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue="concepts" className="w-full">
+            <TabsList className="grid w-full grid-cols-3 max-w-md">
+              <TabsTrigger value="concepts">Concepts</TabsTrigger>
+              <TabsTrigger value="rules">Entry Rules</TabsTrigger>
+              <TabsTrigger value="risk">Risk Mgmt</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="concepts" className="space-y-4 mt-4">
+              {isEditingPlan ? (
+                <>
+                  <div className="space-y-3">
+                    {editingTradingPlan?.concepts && editingTradingPlan.concepts.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {editingTradingPlan.concepts.map((concept, index) => (
+                          <div key={index} className="flex items-center gap-1 px-2 py-1 rounded-md bg-primary/10">
+                            <span>{concept}</span>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => removeConcept(index)}
+                              className="h-5 w-5 rounded-full p-0 ml-1"
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-muted-foreground italic mb-4">
+                        No concepts defined yet. Add your first trading concept below.
+                      </div>
+                    )}
+                    
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Add new trading concept"
+                        value={newConcept}
+                        onChange={(e) => setNewConcept(e.target.value)}
+                        className="flex-1"
+                      />
+                      <Button 
+                        variant="outline"
+                        onClick={addConcept}
+                        className="shrink-0"
+                      >
+                        <PlusCircle className="h-4 w-4 mr-1" /> Add
+                      </Button>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {tradingPlan?.concepts && tradingPlan.concepts.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {tradingPlan.concepts.map((concept, index) => (
+                        <Badge key={index} variant="secondary" className="px-2 py-1 bg-primary/10">
+                          {concept}
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-muted-foreground italic">
+                      No trading concepts defined. Click Edit Plan to add some.
+                    </div>
+                  )}
+                </>
+              )}
+            </TabsContent>
+            
+            <TabsContent value="rules" className="space-y-4 mt-4">
+              {isEditingPlan ? (
+                <>
+                  <div className="space-y-3">
+                    {editingTradingPlan?.entryRules && editingTradingPlan.entryRules.length > 0 ? (
+                      <div className="space-y-2">
+                        {editingTradingPlan.entryRules.map((rule, index) => (
+                          <div key={index} className="flex items-center gap-2 p-2 rounded-md bg-background border">
+                            <div className="flex-1 text-sm">{rule}</div>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => removeEntryRule(index)}
+                              className="h-7 w-7 rounded-full p-0"
+                            >
+                              <Trash className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-muted-foreground italic mb-4">
+                        No entry rules defined yet. Add your first entry rule below.
+                      </div>
+                    )}
+                    
+                    <div className="flex gap-2">
+                      <Textarea
+                        placeholder="Add new entry rule"
+                        value={newEntryRule}
+                        onChange={(e) => setNewEntryRule(e.target.value)}
+                        className="flex-1 min-h-[60px] resize-none"
+                      />
+                    </div>
+                    <Button 
+                      variant="outline"
+                      onClick={addEntryRule}
+                      className="mt-2"
+                    >
+                      <PlusCircle className="h-4 w-4 mr-1" /> Add Rule
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {tradingPlan?.entryRules && tradingPlan.entryRules.length > 0 ? (
+                    <ul className="space-y-2 text-sm list-disc list-inside">
+                      {tradingPlan.entryRules.map((rule, index) => (
+                        <li key={index}>{rule}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="text-sm text-muted-foreground italic">
+                      No entry rules defined. Click Edit Plan to add some.
+                    </div>
+                  )}
+                </>
+              )}
+            </TabsContent>
+            
+            <TabsContent value="risk" className="space-y-4 mt-4">
+              {isEditingPlan ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Risk Per Trade (%)</label>
+                      <Input
+                        type="number"
+                        min="0.1"
+                        step="0.1"
+                        value={editingTradingPlan?.riskManagement?.riskPercentage || 1}
+                        onChange={(e) => updateRiskManagement('riskPercentage', parseFloat(e.target.value))}
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Risk:Reward Target</label>
+                      <Input
+                        type="number"
+                        min="0.1"
+                        step="0.1"
+                        value={editingTradingPlan?.riskManagement?.targetRiskRewardRatio || 2}
+                        onChange={(e) => updateRiskManagement('targetRiskRewardRatio', parseFloat(e.target.value))}
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Plan Type</label>
+                      <Select
+                        value={editingTradingPlan?.riskManagement?.planType || 'fixed'}
+                        onValueChange={(value) => updateRiskManagement('planType', value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select plan type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="fixed">Fixed</SelectItem>
+                          <SelectItem value="dynamic">Dynamic</SelectItem>
+                          <SelectItem value="custom">Custom</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Reduce Risk After Loss</label>
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          checked={editingTradingPlan?.riskManagement?.reduceRiskAfterLoss || false}
+                          onCheckedChange={(checked) => updateRiskManagement('reduceRiskAfterLoss', checked)}
+                          className="data-[state=checked]:bg-primary"
+                        />
+                        <span className="text-sm text-muted-foreground">
+                          {editingTradingPlan?.riskManagement?.reduceRiskAfterLoss ? 'Enabled' : 'Disabled'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {tradingPlan?.riskManagement ? (
+                    <div className="space-y-3 text-sm">
+                      <div className="flex flex-col sm:flex-row sm:justify-between border-b pb-2">
+                        <span className="text-muted-foreground mb-1 sm:mb-0">Risk Per Trade:</span>
+                        <span className="font-medium">{tradingPlan.riskManagement.riskPercentage}%</span>
+                      </div>
+                      
+                      <div className="flex flex-col sm:flex-row sm:justify-between border-b pb-2">
+                        <span className="text-muted-foreground mb-1 sm:mb-0">Risk/Reward Target:</span>
+                        <span className="font-medium">1:{tradingPlan.riskManagement.targetRiskRewardRatio}</span>
+                      </div>
+                      
+                      <div className="flex flex-col sm:flex-row sm:justify-between border-b pb-2">
+                        <span className="text-muted-foreground mb-1 sm:mb-0">Reduce Risk After Loss:</span>
+                        <span className="font-medium">{tradingPlan.riskManagement.reduceRiskAfterLoss ? 'Yes' : 'No'}</span>
+                      </div>
+                      
+                      <div className="flex flex-col sm:flex-row sm:justify-between pb-2">
+                        <span className="text-muted-foreground mb-1 sm:mb-0">Plan Type:</span>
+                        <span className="font-medium">{tradingPlan.riskManagement.planType || 'Standard'}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-sm text-muted-foreground italic">
+                      No risk management settings defined. Click Edit Plan to add some.
+                    </div>
+                  )}
+                </>
+              )}
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
     </div>
   );
 }
