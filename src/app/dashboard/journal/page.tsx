@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { getDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -746,8 +746,8 @@ export default function JournalPage() {
                           className={cn(
                             "absolute inset-0 p-1 flex flex-col rounded-md transition-colors",
                             hasTrades ? "cursor-pointer" : "cursor-default",
-                            info?.pnl > 0 ? "bg-green-950/20" : 
-                            info?.pnl < 0 ? "bg-red-950/20" : 
+                            info && info.pnl > 0 ? "bg-green-950/20" : 
+                            info && info.pnl < 0 ? "bg-red-950/20" : 
                             "bg-muted/20",
                             isToday && "ring-1 ring-primary"
                           )}
@@ -764,14 +764,14 @@ export default function JournalPage() {
                             <div className="mt-auto space-y-0.5 text-center">
                               <div className={cn(
                                 "text-xs font-medium",
-                                info.pnl > 0 ? "text-green-500" : "text-red-500"
+                                info && info.pnl > 0 ? "text-green-500" : "text-red-500"
                               )}>
-                                {formatCurrency(info.pnl)}
+                                {formatCurrency(info?.pnl || 0)}
                               </div>
                               <div className="text-[10px] text-muted-foreground">
-                                {info.winCount > 0 && <span className="text-green-500">{info.winCount}W</span>}
-                                {info.winCount > 0 && info.lossCount > 0 && '/'}
-                                {info.lossCount > 0 && <span className="text-red-500">{info.lossCount}L</span>}
+                                {info?.winCount > 0 && <span className="text-green-500">{info?.winCount}W</span>}
+                                {info?.winCount > 0 && info?.lossCount > 0 && '/'}
+                                {info?.lossCount > 0 && <span className="text-red-500">{info?.lossCount}L</span>}
                               </div>
                             </div>
                           ) : (
@@ -802,8 +802,8 @@ export default function JournalPage() {
                           className={cn(
                             "absolute inset-0 p-1 flex flex-col rounded-md transition-colors",
                             hasTrades ? "cursor-pointer" : "cursor-default",
-                            info?.pnl > 0 ? "bg-green-950/20" : 
-                            info?.pnl < 0 ? "bg-red-950/20" : 
+                            info && info.pnl > 0 ? "bg-green-950/20" : 
+                            info && info.pnl < 0 ? "bg-red-950/20" : 
                             "bg-muted/20",
                             isToday && "ring-1 ring-primary"
                           )}
@@ -820,14 +820,14 @@ export default function JournalPage() {
                             <div className="mt-auto space-y-0.5 text-center">
                               <div className={cn(
                                 "text-xs font-medium",
-                                info.pnl > 0 ? "text-green-500" : "text-red-500"
+                                info?.pnl > 0 ? "text-green-500" : "text-red-500"
                               )}>
-                                {formatCurrency(info.pnl)}
+                                {formatCurrency(info?.pnl || 0)}
                               </div>
                               <div className="text-[10px] text-muted-foreground">
-                                {info.winCount > 0 && <span className="text-green-500">{info.winCount}W</span>}
-                                {info.winCount > 0 && info.lossCount > 0 && '/'}
-                                {info.lossCount > 0 && <span className="text-red-500">{info.lossCount}L</span>}
+                                {info?.winCount > 0 && <span className="text-green-500">{info?.winCount}W</span>}
+                                {info?.winCount > 0 && info?.lossCount > 0 && '/'}
+                                {info?.lossCount > 0 && <span className="text-red-500">{info?.lossCount}L</span>}
                               </div>
                             </div>
                           ) : (
@@ -851,33 +851,33 @@ export default function JournalPage() {
                         <div 
                           className={cn(
                             "absolute inset-0 p-1 flex flex-col rounded-md transition-colors",
-                            weekViewData[6].dayData && weekViewData[6].dayData.tradeCount > 0 ? "cursor-pointer" : "cursor-default",
-                            weekViewData[6].dayData?.pnl > 0 ? "bg-green-950/20" : 
-                            weekViewData[6].dayData?.pnl < 0 ? "bg-red-950/20" : 
+                            weekViewData[6]?.dayData && weekViewData[6]?.dayData?.tradeCount > 0 ? "cursor-pointer" : "cursor-default",
+                            weekViewData[6]?.dayData && weekViewData[6]?.dayData?.pnl > 0 ? "bg-green-950/20" : 
+                            weekViewData[6]?.dayData && weekViewData[6]?.dayData?.pnl < 0 ? "bg-red-950/20" : 
                             "bg-muted/20",
-                            weekViewData[6].date.toDateString() === new Date().toDateString() && "ring-1 ring-primary"
+                            weekViewData[6]?.date.toDateString() === new Date().toDateString() && "ring-1 ring-primary"
                           )}
-                          onClick={() => weekViewData[6].dayData?.tradeCount ? handleDaySelect(weekViewData[6].date) : null}
+                          onClick={() => weekViewData[6]?.dayData?.tradeCount ? handleDaySelect(weekViewData[6].date) : null}
                         >
                           <div className={cn(
                             "text-center text-xs font-medium",
-                            weekViewData[6].date.toDateString() === new Date().toDateString() && "text-primary"
+                            weekViewData[6]?.date.toDateString() === new Date().toDateString() && "text-primary"
                           )}>
-                            {weekViewData[6].date.getDate()}
+                            {weekViewData[6]?.date.getDate()}
                           </div>
                           
-                          {weekViewData[6].dayData && weekViewData[6].dayData.tradeCount > 0 ? (
+                          {weekViewData[6]?.dayData && weekViewData[6].dayData.tradeCount > 0 ? (
                             <div className="mt-auto space-y-0.5 text-center">
                               <div className={cn(
                                 "text-xs font-medium",
-                                weekViewData[6].dayData.pnl > 0 ? "text-green-500" : "text-red-500"
+                                weekViewData[6]?.dayData?.pnl > 0 ? "text-green-500" : "text-red-500"
                               )}>
-                                {formatCurrency(weekViewData[6].dayData.pnl)}
+                                {formatCurrency(weekViewData[6]?.dayData?.pnl || 0)}
                               </div>
                               <div className="text-[10px] text-muted-foreground">
-                                {weekViewData[6].dayData.winCount > 0 && <span className="text-green-500">{weekViewData[6].dayData.winCount}W</span>}
-                                {weekViewData[6].dayData.winCount > 0 && weekViewData[6].dayData.lossCount > 0 && '/'}
-                                {weekViewData[6].dayData.lossCount > 0 && <span className="text-red-500">{weekViewData[6].dayData.lossCount}L</span>}
+                                {weekViewData[6]?.dayData?.winCount > 0 && <span className="text-green-500">{weekViewData[6]?.dayData?.winCount}W</span>}
+                                {weekViewData[6]?.dayData?.winCount > 0 && weekViewData[6]?.dayData?.lossCount > 0 && '/'}
+                                {weekViewData[6]?.dayData?.lossCount > 0 && <span className="text-red-500">{weekViewData[6]?.dayData?.lossCount}L</span>}
                               </div>
                             </div>
                           ) : (
@@ -1003,39 +1003,219 @@ export default function JournalPage() {
                               <td 
                                 key={dateKey} 
                                 className="align-top w-[12.5%] p-0 relative"
-                                onClick={() => hasTrades ? handleDaySelect(date) : null}
                               >
                                 <div className="pt-[100%]"></div>
-                                <div className={cn(
-                                  "absolute inset-0.5 flex flex-col gap-1 justify-space-between items-center p-2 rounded-md bg-primary/2 hover:bg-primary/5 cursor-pointer",
-                                  !isCurrentMonth && "opacity-40",
-                                  isSelected && "ring-1 ring-inset ring-primary",
-                                  isToday && "ring-2 ring-inset ring-primary",
-                                  hasNegativePnl && "bg-red-950/40 hover:bg-red-950/60",
-                                  hasPositivePnl && "bg-green-950/40 hover:bg-green-950/60",
-                                  hasTrades && "cursor-pointer"
-                                )}>
-                                  <div className={cn(
-                                    "text-sm text-center",
-                                    isToday && "font-bold text-primary"
-                                  )}>
-                                    {date.getDate()}
-                                  </div>
-                                  
-                                  {hasTrades && (
-                                    <div className="text-center flex flex-col items-center justify-space-between gap-1">
+                                {hasTrades ? (
+                                  <HoverCard>
+                                    <HoverCardTrigger asChild>
                                       <div className={cn(
-                                        "text-xs font-medium",
-                                        hasPositivePnl ? "text-green-500" : "text-red-500"
+                                        "absolute inset-0.5 flex flex-col gap-1 justify-space-between items-center p-2 rounded-md bg-primary/2 hover:bg-primary/5 cursor-pointer",
+                                        !isCurrentMonth && "opacity-40",
+                                        isSelected && "ring-1 ring-inset ring-primary",
+                                        isToday && "ring-2 ring-inset ring-primary",
+                                        hasNegativePnl && "bg-red-950/40 hover:bg-red-950/60",
+                                        hasPositivePnl && "bg-green-950/40 hover:bg-green-950/60",
+                                        hasTrades && "cursor-pointer"
+                                      )}
+                                      onClick={() => hasTrades ? handleDaySelect(date) : null}
+                                    >
+                                      <div className={cn(
+                                        "text-sm text-center",
+                                        isToday && "font-bold text-primary"
                                       )}>
-                                        {formatCurrency(dayInfo.pnl)}
+                                        {date.getDate()}
                                       </div>
-                                      <div className="text-xs text-muted-foreground/60 mt-0.5">
-                                        {dayInfo.tradeCount} trades
+                                      
+                                      {hasTrades && (
+                                        <div className="text-center flex flex-col items-center justify-space-between gap-1">
+                                          <div className={cn(
+                                            "text-xs font-medium",
+                                            hasPositivePnl ? "text-green-500" : "text-red-500"
+                                          )}>
+                                            {formatCurrency(dayInfo.pnl)}
+                                          </div>
+                                          <div className="text-xs text-muted-foreground/60 mt-0.5">
+                                            {dayInfo.tradeCount} trades
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </HoverCardTrigger>
+                                  <HoverCardContent className="w-96 p-0 overflow-hidden border-none shadow-lg">
+                                    <div className={cn(
+                                      "bg-gradient-to-br px-4 py-3",
+                                      dayInfo.pnl > 0 
+                                        ? "from-green-900/90 via-green-900/70 to-background/95 border-b border-green-500/30" 
+                                        : dayInfo.pnl < 0 
+                                          ? "from-red-900/90 via-red-900/70 to-background/95 border-b border-red-500/30" 
+                                          : "from-primary/30 via-primary/20 to-background/95 border-b border-primary/30"
+                                    )}>
+                                      <div className="flex justify-between items-center">
+                                        <div>
+                                          <h4 className="font-bold text-base">{date.toLocaleDateString('en-US', {
+                                            weekday: 'long',
+                                            month: 'long',
+                                            day: 'numeric'
+                                          })}</h4>
+                                          <p className="text-sm text-muted-foreground/90 mt-0.5 flex items-center gap-2">
+                                            <span className="flex items-center gap-1">
+ 
+                                              {dayInfo.tradeCount} trade{dayInfo.tradeCount !== 1 ? 's' : ''}
+                                            </span>
+                                            <span className="inline-block h-1 w-1 rounded-full bg-muted-foreground/40"></span>
+                                            <span className="flex items-center gap-1">
+
+                                              {dayInfo.winCount} win{dayInfo.winCount !== 1 ? 's' : ''}
+                                            </span>
+                                            <span className="inline-block h-1 w-1 rounded-full bg-muted-foreground/40"></span>
+                                            <span className="flex items-center gap-1">
+
+                                              {dayInfo.lossCount} loss{dayInfo.lossCount !== 1 ? 'es' : ''}
+                                            </span>
+                                          </p>
+                                        </div>
+                                        <div className={cn(
+                                          "text-2xl font-bold rounded-md px-3 py-1 ",
+                                          dayInfo.pnl > 0 
+                                            ? "text-green-300" 
+                                            : "text-red-300"
+                                        )}>
+                                          {formatCurrency(dayInfo.pnl)}
+                                        </div>
                                       </div>
                                     </div>
-                                  )}
-                                </div>
+                                    
+                                    <div className="p-4 bg-gradient-to-b from-background to-muted/20">
+                                      <div className="grid grid-cols-3 gap-3 mb-4">
+                                        <div className="bg-background rounded-lg p-3 text-center shadow-sm border border-muted/50">
+                                          <div className="text-xs text-muted-foreground mb-1 opacity-80">Win Rate</div>
+                                          <div className="text-lg font-semibold">
+                                            {dayInfo.tradeCount > 0 
+                                              ? Math.round((dayInfo.winCount / dayInfo.tradeCount) * 100) 
+                                              : 0}%
+                                          </div>
+                                          <div className="w-full bg-muted h-1 mt-2 rounded-full overflow-hidden">
+                                            <div 
+                                              className="bg-primary h-full rounded-full"
+                                              style={{ 
+                                                width: `${dayInfo.tradeCount > 0 ? Math.round((dayInfo.winCount / dayInfo.tradeCount) * 100) : 0}%` 
+                                              }}
+                                            ></div>
+                                          </div>
+                                        </div>
+                                        <div className="bg-background rounded-lg p-3 text-center shadow-sm border border-muted/50">
+                                          <div className="text-xs text-muted-foreground mb-1 opacity-80">Wins</div>
+                                          <div className="text-lg font-semibold text-green-500">{dayInfo.winCount}</div>
+                                          <div className="w-full bg-muted h-1 mt-2 rounded-full overflow-hidden">
+                                            <div 
+                                              className="bg-green-500 h-full rounded-full"
+                                              style={{ 
+                                                width: `${dayInfo.tradeCount > 0 ? Math.round((dayInfo.winCount / dayInfo.tradeCount) * 100) : 0}%` 
+                                              }}
+                                            ></div>
+                                          </div>
+                                        </div>
+                                        <div className="bg-background rounded-lg p-3 text-center shadow-sm border border-muted/50">
+                                          <div className="text-xs text-muted-foreground mb-1 opacity-80">Losses</div>
+                                          <div className="text-lg font-semibold text-red-500">{dayInfo.lossCount}</div>
+                                          <div className="w-full bg-muted h-1 mt-2 rounded-full overflow-hidden">
+                                            <div 
+                                              className="bg-red-500 h-full rounded-full"
+                                              style={{ 
+                                                width: `${dayInfo.tradeCount > 0 ? Math.round((dayInfo.lossCount / dayInfo.tradeCount) * 100) : 0}%` 
+                                              }}
+                                            ></div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                      
+                                      {dayInfo.trades && dayInfo.trades.length > 0 && (
+                                        <div className="mb-4">
+                                          <h5 className="text-sm font-medium mb-2 border-b pb-1.5">Latest Trades</h5>
+                                          <div className="space-y-2.5">
+                                            {dayInfo.trades.slice(0, 3).map((trade, index) => (
+                                              <div 
+                                                key={index} 
+                                                className={cn(
+                                                  "flex justify-between items-center py-2 px-3 rounded-md border",
+                                                  trade.pnl > 0 
+                                                    ? "bg-green-950/30 border-green-500/30" 
+                                                    : "bg-red-950/30 border-red-500/30"
+                                                )}
+                                              >
+                                                <div className="flex items-center gap-2">
+                                                  <div className={cn(
+                                                    "w-7 h-7 rounded-full flex items-center justify-center shadow-sm",
+                                                    trade.type === 'long' 
+                                                      ? "bg-green-900/50 text-green-400 border border-green-600/30" 
+                                                      : "bg-red-900/50 text-red-400 border border-red-600/30"
+                                                  )}>
+                                                    <span>
+                                                      {trade.type === 'long' ? '▲' : '▼'}
+                                                    </span>
+                                                  </div>
+                                                  <div>
+                                                    <span className="font-medium block">{trade.symbol}</span>
+                                                    <span className="text-xs text-muted-foreground">
+                                                      {formatCurrency(trade.entry)} → {formatCurrency(trade.exit)}
+                                                    </span>
+                                                  </div>
+                                                </div>
+                                                <div className="text-right">
+                                                  <span className={cn(
+                                                    "font-semibold text-sm block",
+                                                    trade.pnl > 0 ? 'text-green-400' : 'text-red-400'
+                                                  )}>
+                                                    {formatCurrency(trade.pnl)}
+                                                  </span>
+                                                  <span className="text-xs text-muted-foreground">
+                                                    {trade.size} units
+                                                  </span>
+                                                </div>
+                                              </div>
+                                            ))}
+                                            {dayInfo.trades.length > 3 && (
+                                              <div className="text-center text-xs text-muted-foreground pt-1">
+                                                +{dayInfo.trades.length - 3} more trades
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      )}
+                                      
+                                      <Button 
+                                        className="w-full group relative overflow-hidden"
+                                        onClick={() => handleDaySelect(date)}
+                                      >
+                                        <span className="absolute inset-0 w-full h-full transition-all duration-300 ease-out bg-gradient-to-r from-primary/0 via-primary/30 to-primary/0 group-hover:translate-x-full"></span>
+                                        <span className="relative flex items-center justify-center gap-1.5">
+                                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M14 3v4a1 1 0 0 0 1 1h4"/>
+                                            <path d="M5 8v-3a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2h-5"/>
+                                            <path d="M5 18a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/>
+                                            <path d="M3 18v-5.5C3 8.96 6.96 5 11.5 5"/>
+                                          </svg>
+                                          View All Trades
+                                        </span>
+                                      </Button>
+                                    </div>
+                                  </HoverCardContent>
+                                </HoverCard>
+                                ) : (
+                                  <div className={cn(
+                                    "absolute inset-0.5 flex flex-col gap-1 justify-space-between items-center p-2 rounded-md bg-primary/2 hover:bg-primary/5 cursor-pointer",
+                                    !isCurrentMonth && "opacity-40",
+                                    isSelected && "ring-1 ring-inset ring-primary",
+                                    isToday && "ring-2 ring-inset ring-primary"
+                                  )}>
+                                    <div className={cn(
+                                      "text-sm text-center",
+                                      isToday && "font-bold text-primary"
+                                    )}>
+                                      {date.getDate()}
+                                    </div>
+                                  </div>
+                                )}
                               </td>
                             );
                           })}
@@ -1157,52 +1337,52 @@ export default function JournalPage() {
               <CardContent className={cn("space-y-6", isMobile && "space-y-3 px-3 py-2")}>
                 <div className={cn("space-y-2 p-3 bg-background rounded-lg border shadow-sm", isMobile && "space-y-1 p-2")}>
                   <div className="text-sm font-medium text-muted-foreground flex items-center gap-1">
-                    <DollarSign className="h-3.5 w-3.5" />
+                    <DollarSign className="h-3.5 w-3.5 flex-shrink-0" />
                     P&L
                   </div>
                   <div className={cn(
-                    "text-3xl font-bold flex items-center gap-2",
+                    "text-3xl font-bold flex items-center gap-2 w-full truncate",
                     isMobile && "text-xl gap-1",
                     isMobile 
                       ? (weekViewStats.totalPnl > 0 ? "text-green-500" : weekViewStats.totalPnl < 0 ? "text-red-500" : "")
                       : (monthlyStats.totalPnl > 0 ? "text-green-500" : monthlyStats.totalPnl < 0 ? "text-red-500" : "")
                   )}>
                     {(isMobile ? weekViewStats.totalPnl : monthlyStats.totalPnl) > 0 ? 
-                      <TrendingUp className={cn("w-6 h-6", isMobile && "w-4 h-4")} /> : 
+                      <TrendingUp className={cn("w-6 h-6 flex-shrink-0", isMobile && "w-4 h-4")} /> : 
                     (isMobile ? weekViewStats.totalPnl : monthlyStats.totalPnl) < 0 ? 
-                      <TrendingDown className={cn("w-6 h-6", isMobile && "w-4 h-4")} /> : null}
-                    {formatCurrency(isMobile ? weekViewStats.totalPnl : monthlyStats.totalPnl)}
+                      <TrendingDown className={cn("w-6 h-6 flex-shrink-0", isMobile && "w-4 h-4")} /> : null}
+                    <span className="truncate">{formatCurrency(isMobile ? weekViewStats.totalPnl : monthlyStats.totalPnl)}</span>
                   </div>
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div className={cn("space-y-1 p-3 bg-background rounded-lg border shadow-sm", isMobile && "space-y-0.5 p-2")}>
                     <div className="text-sm font-medium text-muted-foreground flex items-center gap-1">
-                      <Layers className="h-3.5 w-3.5" />
+                      <Layers className="h-3.5 w-3.5 flex-shrink-0" />
                       Trades
                     </div>
-                    <div className={cn("text-2xl font-semibold", isMobile && "text-lg")}>
+                    <div className={cn("text-2xl font-semibold truncate", isMobile && "text-lg")}>
                       {isMobile ? weekViewStats.tradeCount : monthlyStats.tradeCount}
                   </div>
                   </div>
                   <div className={cn("space-y-1 p-3 bg-background rounded-lg border shadow-sm", isMobile && "space-y-0.5 p-2")}>
                     <div className="text-sm font-medium text-muted-foreground flex items-center gap-1">
-                      <PieChart className="h-3.5 w-3.5" />
+                      <PieChart className="h-3.5 w-3.5 flex-shrink-0" />
                       Win Rate
                     </div>
-                    <div className={cn("text-2xl font-semibold", isMobile && "text-lg")}>
+                    <div className={cn("text-2xl font-semibold truncate", isMobile && "text-lg")}>
                       {(isMobile ? weekViewStats.winRate : monthlyStats.winRate).toFixed(1)}%
                     </div>
                   </div>
                   <div className={cn("space-y-1 p-3 bg-background rounded-lg border shadow-sm", isMobile && "space-y-0.5 p-2")}>
                     <div className="text-sm font-medium text-muted-foreground">Wins</div>
-                    <div className={cn("text-2xl font-semibold text-green-500", isMobile && "text-lg")}>
+                    <div className={cn("text-2xl font-semibold text-green-500 truncate", isMobile && "text-lg")}>
                       {isMobile ? weekViewStats.winCount : monthlyStats.winCount}
                   </div>
                   </div>
                   <div className={cn("space-y-1 p-3 bg-background rounded-lg border shadow-sm", isMobile && "space-y-0.5 p-2")}>
                     <div className="text-sm font-medium text-muted-foreground">Losses</div>
-                    <div className={cn("text-2xl font-semibold text-red-500", isMobile && "text-lg")}>
+                    <div className={cn("text-2xl font-semibold text-red-500 truncate", isMobile && "text-lg")}>
                       {isMobile ? weekViewStats.lossCount : monthlyStats.lossCount}
                     </div>
                   </div>
@@ -1212,13 +1392,15 @@ export default function JournalPage() {
                 <div className="pt-4 border-t">
                   <div className="text-sm font-medium mb-3 flex items-center justify-between">
                     <span className="flex items-center gap-1">
-                      <Clock className="h-3.5 w-3.5" />
+                      <Clock className="h-3.5 w-3.5 flex-shrink-0" />
                       Weekly Performance
                     </span>
                     <span className="text-xs text-muted-foreground">P&L / Trades</span>
                   </div>
                   <div className="space-y-3">
-                    {weekData.map((week, index) => (
+                    {weekData
+                      .filter(week => week.tradeCount > 0)
+                      .map((week, index) => (
                       <HoverCard key={index}>
                         <HoverCardTrigger asChild>
                           <div className={cn(
@@ -1228,18 +1410,18 @@ export default function JournalPage() {
                             "bg-muted/40 hover:bg-muted/60"
                           )}>
                             <div className="flex justify-between items-center">
-                              <div className="text-sm font-medium">
+                              <div className="text-sm font-medium truncate pr-2 max-w-[50%]">
                                 Week {index + 1}: {week.startDate.getDate()}-{week.endDate.getDate()} 
                                 {week.startDate.getMonth() !== week.endDate.getMonth() ? 
                                   ` ${week.startDate.toLocaleString('default', { month: 'short' })}-${week.endDate.toLocaleString('default', { month: 'short' })}` : 
                                   ` ${week.startDate.toLocaleString('default', { month: 'short' })}`}
                               </div>
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-1 flex-shrink-0">
                                 <span className="text-xs px-1.5 py-0.5 rounded-full bg-background">
                                   {week.tradeCount}
                                 </span>
                                 <span className={cn(
-                                  "font-medium",
+                                  "font-medium truncate max-w-[100px]",
                                   week.pnl > 0 ? "text-green-500" : week.pnl < 0 ? "text-red-500" : ""
                                 )}>
                                   {formatCurrency(week.pnl)}

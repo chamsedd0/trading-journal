@@ -74,23 +74,23 @@ export default function SignUpPage() {
   };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/20 via-background to-background p-2 sm:p-4 md:p-8">
+    <div className="min-h-screen w-full flex items-center justify-center bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/20 via-background to-background px-4 sm:px-6 py-8 sm:py-12">
       <div className="w-full max-w-md relative">
         {/* Logo */}
-        <div className="absolute -top-16 sm:-top-20 left-1/2 -translate-x-1/2 flex items-center gap-2 mb-8">
+        <div className="absolute -top-12 sm:-top-16 left-1/2 -translate-x-1/2 flex items-center gap-2 mb-8">
           <div className="bg-primary/10 p-2 sm:p-3 rounded-xl">
-            <span className="text-primary text-2xl sm:text-3xl font-bold">TJ</span>
+            <span className="text-primary text-xl sm:text-2xl font-bold">TJ</span>
           </div>
         </div>
 
         <Card className="w-full border-border/50 shadow-2xl backdrop-blur-sm bg-card/95">
-          <CardHeader className="space-y-1 text-center pb-6 sm:pb-8 px-4 sm:px-6">
+          <CardHeader className="space-y-1 text-center pb-4 sm:pb-6 px-4 sm:px-6">
             <CardTitle className="text-xl sm:text-2xl font-bold tracking-tight">Create your account</CardTitle>
             <CardDescription className="text-sm sm:text-base">
               Start your trading journey today
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6 px-4 sm:px-6">
+          <CardContent className="space-y-4 sm:space-y-6 px-4 sm:px-6">
             {/* Social Sign Up */}
             <Button 
               className="w-full h-10 sm:h-11 text-sm sm:text-base" 
@@ -146,8 +146,8 @@ export default function SignUpPage() {
               </div>
             </div>
 
-            <form onSubmit={handleEmailSignUp} className="space-y-4">
-              <div className="space-y-2">
+            <form onSubmit={handleEmailSignUp} className="space-y-3 sm:space-y-4">
+              <div className="space-y-1 sm:space-y-2">
                 <Label htmlFor="email" className="text-sm font-medium">Email address</Label>
                 <Input 
                   id="email" 
@@ -155,11 +155,11 @@ export default function SignUpPage() {
                   placeholder="name@example.com" 
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="h-10 sm:h-11 text-sm sm:text-base"
+                  className="h-9 sm:h-10 text-sm"
                   required
                 />
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1 sm:space-y-2">
                 <Label htmlFor="password" className="text-sm font-medium">Password</Label>
                 <Input 
                   id="password" 
@@ -167,19 +167,19 @@ export default function SignUpPage() {
                   placeholder="••••••••" 
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="h-10 sm:h-11 text-sm sm:text-base"
+                  className="h-9 sm:h-10 text-sm"
                   required
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="confirm-password" className="text-sm font-medium">Confirm Password</Label>
+              <div className="space-y-1 sm:space-y-2">
+                <Label htmlFor="confirm-password" className="text-sm font-medium">Confirm password</Label>
                 <Input 
                   id="confirm-password" 
                   type="password"
                   placeholder="••••••••" 
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="h-10 sm:h-11 text-sm sm:text-base"
+                  className="h-9 sm:h-10 text-sm"
                   required
                 />
               </div>
@@ -202,23 +202,19 @@ export default function SignUpPage() {
               </Button>
             </form>
           </CardContent>
-          <CardFooter className="flex flex-col space-y-4 pt-4 px-4 sm:px-6">
-            <div className="text-center text-xs sm:text-sm text-muted-foreground">
+          <CardFooter className="flex flex-col space-y-4 px-4 sm:px-6 pt-0 pb-6 sm:pb-8">
+            <div className="text-center text-sm">
               Already have an account?{" "}
-              <Link href="/auth/login" className="font-medium text-primary hover:text-primary/90 transition-colors">
+              <Link href="/auth/login" className="text-primary font-medium hover:text-primary/90 transition-colors">
                 Sign in
               </Link>
             </div>
-            <div className="text-center text-xs sm:text-sm">
-              <Link 
-                href="/" 
-                className="text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3 sm:w-4 sm:h-4">
-                  <path d="m15 18-6-6 6-6"/>
-                </svg>
-                Back to home
-              </Link>
+            <div className="text-center">
+              <Button variant="ghost" size="sm" asChild>
+                <Link href="/">
+                  ← Back to Home
+                </Link>
+              </Button>
             </div>
           </CardFooter>
         </Card>
