@@ -248,11 +248,11 @@ export default function TradesPage() {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <h1 className="text-3xl font-bold">Trades History</h1>
         <Link href="/dashboard/trades/new">
-          <Button className="shadow-sm w-full md:w-auto">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
+          <Button className="shadow-sm w-full md:w-auto mobile-icon-only">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 5v14M5 12h14" />
             </svg>
-            New Trade
+            <span className="button-text ml-2">New Trade</span>
           </Button>
         </Link>
       </div>
@@ -269,11 +269,11 @@ export default function TradesPage() {
             </div>
             <p className="text-muted-foreground mb-4">You don't have any trades yet.</p>
             <Link href="/dashboard/trades/new">
-              <Button className="shadow-sm">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
+              <Button className="shadow-sm mobile-icon-only">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 5v14M5 12h14" />
                 </svg>
-                Add Your First Trade
+                <span className="button-text ml-2">Add Your First Trade</span>
               </Button>
             </Link>
           </CardContent>
@@ -390,7 +390,7 @@ export default function TradesPage() {
                         {trade.pnl >= 0 ? '+' : ''}{Number(trade.pnl).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <div className="flex justify-end items-center space-x-2">
+                        <div className="flex justify-end items-center space-x-2 mobile-compact-table-actions">
                           <Link href={`/dashboard/trades/${trade.id}`}>
                             <Button size="sm" variant="outline" className="h-8 px-2">
                               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -425,7 +425,7 @@ export default function TradesPage() {
                                   Are you sure you want to delete this trade record? This action cannot be undone.
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
-                              <AlertDialogFooter>
+                              <AlertDialogFooter className="mobile-compact-buttons">
                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                                 <AlertDialogAction
                                   onClick={() => tradeToDelete && handleDeleteTrade(tradeToDelete)}

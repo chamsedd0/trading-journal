@@ -154,3 +154,88 @@
     @apply w-1.5 opacity-0 transition-opacity duration-100 ease-in-out hover:opacity-100 data-[visible=true]:opacity-100;
   }
 }
+
+/* Mobile-specific styles for buttons */
+@media (max-width: 500px) {
+  /* Mobile typography - reduce font sizes */
+  h1 {
+    font-size: 1.5rem !important; /* Down from 1.875rem/2.25rem */
+    line-height: 1.75rem !important;
+  }
+  
+  h2 {
+    font-size: 1.25rem !important; /* Down from 1.5rem */
+    line-height: 1.5rem !important;
+  }
+  
+  h3, .text-xl {
+    font-size: 1.125rem !important; /* Down from 1.25rem */
+    line-height: 1.4rem !important;
+  }
+  
+  .text-lg {
+    font-size: 1rem !important;
+    line-height: 1.3rem !important;
+  }
+  
+  .text-base {
+    font-size: 0.9375rem !important;
+    line-height: 1.25rem !important;
+  }
+  
+  .text-sm {
+    font-size: 0.8125rem !important;
+    line-height: 1.15rem !important;
+  }
+  
+  .text-xs {
+    font-size: 0.75rem !important;
+    line-height: 1rem !important;
+  }
+  
+  /* Card and component padding adjustments */
+  .card {
+    padding: 0.75rem !important;
+  }
+  
+  /* Make stats text more compact */
+  .text-2xl, .text-3xl {
+    font-size: 1.25rem !important;
+    line-height: 1.5rem !important;
+  }
+  
+  /* Make all buttons in the .mobile-icon-only class show only icons */
+  .mobile-icon-only .button-text {
+    display: none;
+  }
+  
+  /* Make all dialog action buttons more compact */
+  .mobile-compact-buttons button {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  /* Make table actions more compact */
+  .mobile-compact-table-actions {
+    display: flex;
+    gap: 0.25rem;
+  }
+  
+  /* Optimize TabsList for mobile */
+  .mobile-tabs-scroll {
+    overflow-x: auto;
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE and Edge */
+  }
+  
+  .mobile-tabs-scroll::-webkit-scrollbar {
+    display: none; /* Chrome, Safari and Opera */
+  }
+  
+  /* Add the mobile-icon-only class to all AlertDialogAction elements automatically */
+  [data-alert-dialog-action="true"] {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}

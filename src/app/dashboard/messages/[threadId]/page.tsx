@@ -438,9 +438,104 @@ export default function ChatPage() {
     }
   };
   
+  // Add long press handler for message deletion
+  useEffect(() => {
+    if (typeof window === 'undefined') return; // Skip on server-side
+    
+    // Long press detection for mobile
+    let pressTimer: NodeJS.Timeout;
+    let longPressedElement: HTMLElement | null = null;
+    
+    const startLongPress = (event: Event) => {
+      // Cast event to any to access touches property
+      const e = event as any;
+      if (!e.touches || e.touches.length !== 1) return; // Only handle single touch
+      
+      const target = e.target as HTMLElement;
+      const messageElement = target.closest('.group') as HTMLElement | null;
+      
+      if (!messageElement) return;
+      
+      // Check if this is user's own message (has delete button)
+      const deleteBtn = messageElement.querySelector('.mobile-delete-btn');
+      if (!deleteBtn) return;
+      
+      // Start timer
+      pressTimer = setTimeout(() => {
+        longPressedElement = messageElement;
+        deleteBtn.classList.add('opacity-100');
+        
+        // Add haptic feedback if available
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+          navigator.vibrate(50);
+        }
+      }, 500); // 500ms long press
+    };
+    
+    const cancelLongPress = () => {
+      clearTimeout(pressTimer);
+    };
+    
+    const handleTouchEnd = (event: Event) => {
+      cancelLongPress();
+      
+      // Hide delete button when tapping elsewhere
+      if (longPressedElement && event.target) {
+        const target = event.target as HTMLElement;
+        const clickedInsideMessage = longPressedElement.contains(target);
+        const clickedDeleteButton = target.closest('.mobile-delete-btn');
+        
+        // If clicked outside current message or not on delete button, hide the delete button
+        if (!clickedInsideMessage || clickedDeleteButton) {
+          const deleteBtn = longPressedElement.querySelector('.mobile-delete-btn');
+          if (deleteBtn) {
+            deleteBtn.classList.remove('opacity-100');
+          }
+          longPressedElement = null;
+        }
+      }
+    };
+    
+    // Add global tap handler to hide delete button when tapping elsewhere
+    const handleGlobalTap = (event: Event) => {
+      if (longPressedElement && event.target) {
+        const target = event.target as HTMLElement;
+        const clickedInsideMessage = longPressedElement.contains(target);
+        const clickedDeleteButton = target.closest('.mobile-delete-btn');
+        
+        // If clicked outside current message, hide the delete button
+        if (!clickedInsideMessage && !clickedDeleteButton) {
+          const deleteBtn = longPressedElement.querySelector('.mobile-delete-btn');
+          if (deleteBtn) {
+            deleteBtn.classList.remove('opacity-100');
+          }
+          longPressedElement = null;
+        }
+      }
+    };
+    
+    // Register events on message container
+    const messagesContainer = document.querySelector('.scroll-area');
+    if (messagesContainer) {
+      messagesContainer.addEventListener('touchstart', startLongPress as EventListener);
+      messagesContainer.addEventListener('touchend', handleTouchEnd as EventListener);
+      messagesContainer.addEventListener('touchcancel', cancelLongPress as EventListener);
+      document.addEventListener('click', handleGlobalTap as EventListener);
+    }
+    
+    return () => {
+      if (messagesContainer) {
+        messagesContainer.removeEventListener('touchstart', startLongPress as EventListener);
+        messagesContainer.removeEventListener('touchend', handleTouchEnd as EventListener);
+        messagesContainer.removeEventListener('touchcancel', cancelLongPress as EventListener);
+        document.removeEventListener('click', handleGlobalTap as EventListener);
+      }
+    };
+  }, []);
+  
   if (loading) {
     return (
-      <div className="flex flex-col h-full">
+      <div className="flex flex-col h-full md:h-full h-screen">
         <div className="flex items-center gap-3 py-3 px-4 border-b">
           <Button variant="ghost" size="icon" asChild>
             <Link href="/dashboard/messages">
@@ -468,9 +563,9 @@ export default function ChatPage() {
   }
   
   return (
-    <div className="flex flex-col h-full bg-background/95">
-      {/* Header */}
-      <div className="flex items-center gap-3 py-3 px-4 border-b bg-background/95 sticky top-0 z-10">
+    <div className="flex flex-col h-[calc(100vh-64px)] md:h-full bg-background/95 relative p-0 m-0 md:p-4 md:m-4">
+      {/* Header - Absolute positioned on mobile */}
+      <div className="flex items-center gap-3 py-3 px-4 border-b bg-background/95 z-10 md:static absolute top-0 left-0 right-0">
         <Button variant="ghost" size="icon" className="flex-shrink-0" asChild>
           <Link href="/dashboard/messages">
             <ArrowLeft className="h-4 w-4" />
@@ -491,9 +586,13 @@ export default function ChatPage() {
         )}
       </div>
       
-      {/* Messages */}
-      <ScrollArea className="flex-1 h-full max-h-[500px] overflow-y-auto" type="always" scrollHideDelay={0}>
-        <div className="p-4 sm:p-6 max-w-4xl mx-auto">
+      {/* Messages - With padding for absolute header and input */}
+      <ScrollArea 
+        className="flex-1 overflow-y-auto md:pt-0 md:pb-0 pt-[57px] pb-[76px]" 
+        type="always" 
+        scrollHideDelay={0}
+      >
+        <div className="p-0 m-0 md:p-6 md:m-auto max-w-4xl mx-auto">
           {messages.length === 0 ? (
             <div className="text-center py-12 px-4">
               <div className="p-4 bg-muted inline-flex rounded-full mb-4">
@@ -578,10 +677,15 @@ export default function ChatPage() {
                                   </div>
                                 </div>
                                 
-                                {/* Delete button for own messages - visible on hover */}
+                                {/* Delete button for own messages - only show after long press on mobile */}
                                 {isSentByMe && (
                                   <button
-                                    className="absolute -top-2 -right-2 p-1 rounded-full bg-background/95 border border-border shadow-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10 hover:border-destructive/30"
+                                    className={cn(
+                                      "absolute -top-2 -right-2 p-1 rounded-full bg-background/95 border border-border shadow-sm",
+                                      "hover:bg-destructive/10 hover:border-destructive/30",
+                                      "md:opacity-0 md:group-hover:opacity-100 transition-opacity", // Desktop: show on hover
+                                      "mobile-delete-btn opacity-0" // Mobile: hidden by default, shown with JS
+                                    )}
                                     onClick={() => deleteMessage(message.id, isSentByMe)}
                                     aria-label="Delete message"
                                   >
@@ -617,8 +721,8 @@ export default function ChatPage() {
         <ScrollBar className="w-0 opacity-0" />
       </ScrollArea>
       
-      {/* Message input */}
-      <div className="p-3 sm:p-4 border-t bg-background/95">
+      {/* Message input - Absolute positioned on mobile */}
+      <div className="p-3 sm:p-4 border-t bg-background/95 md:static absolute bottom-0 left-0 right-0 z-10">
         <form onSubmit={sendMessage} className="flex gap-2 max-w-3xl mx-auto">
           <Input
             placeholder={`Message ${trader?.displayName || 'trader'}...`}

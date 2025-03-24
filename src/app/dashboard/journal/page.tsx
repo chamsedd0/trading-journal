@@ -41,6 +41,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from "@/components/ui/switch";
+import { useMediaQuery } from "@/hooks/use-media-query";
 
 interface Trade {
   id: string;
@@ -96,6 +97,12 @@ interface TradingPlan {
   };
 }
 
+// Add new interface for weekly view data
+interface WeekViewData {
+  date: Date;
+  dayData: DayData | undefined;
+}
+
 export default function JournalPage() {
   const { user } = useAuth();
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -120,6 +127,25 @@ export default function JournalPage() {
   const [newConcept, setNewConcept] = useState('');
   const [newEntryRule, setNewEntryRule] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  
+  // Mobile specific states
+  const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => {
+    // Start with the current day and go back to include the last 7 days
+    const today = new Date();
+    const startDay = new Date(today);
+    startDay.setDate(today.getDate() - 6); // Go back 6 days from today to show current day + previous 6 days
+    startDay.setHours(0, 0, 0, 0);
+    return startDay;
+  });
+  const isMobile = useMediaQuery("(max-width: 500px)");
+  const [weekViewData, setWeekViewData] = useState<WeekViewData[]>([]);
+  const [weekViewStats, setWeekViewStats] = useState({
+    totalPnl: 0,
+    tradeCount: 0,
+    winCount: 0,
+    lossCount: 0,
+    winRate: 0,
+  });
 
   // Function to get the first day of the month
   const getMonthStart = (date: Date) => {
@@ -535,6 +561,92 @@ export default function JournalPage() {
     });
   };
 
+  // Function to get the last 7 days for mobile view
+  const getLastSevenDays = (startDate: Date) => {
+    const result: Date[] = [];
+    const start = new Date(startDate);
+    
+    for (let i = 0; i < 7; i++) {
+      const day = new Date(start);
+      day.setDate(start.getDate() + i);
+      result.push(day);
+    }
+    
+    return result;
+  };
+
+  // Navigate to previous week for mobile view
+  const previousWeek = () => {
+    const newDate = new Date(currentWeekStart);
+    newDate.setDate(newDate.getDate() - 7);
+    setCurrentWeekStart(newDate);
+  };
+
+  // Navigate to next week for mobile view
+  const nextWeek = () => {
+    const newDate = new Date(currentWeekStart);
+    newDate.setDate(newDate.getDate() + 7);
+    setCurrentWeekStart(newDate);
+  };
+
+  // Navigate to current week for mobile view
+  const currentWeek = () => {
+    const today = new Date();
+    const startDay = new Date(today);
+    startDay.setDate(today.getDate() - 6); // Show last week including today
+    startDay.setHours(0, 0, 0, 0);
+    setCurrentWeekStart(startDay);
+  };
+
+  // Update week view data when needed
+  useEffect(() => {
+    // Always process and show the 7 days regardless of whether there's trade data
+    const days = getLastSevenDays(currentWeekStart);
+    
+    // Process data for each day in the week
+    const weekViewItems: WeekViewData[] = days.map(date => {
+      const dateKey = formatDateKey(date);
+      return {
+        date,
+        dayData: dayData.get(dateKey)
+      };
+    });
+    
+    setWeekViewData(weekViewItems);
+    
+    // Calculate stats for the visible week
+    let totalPnl = 0;
+    let tradeCount = 0;
+    let winCount = 0;
+    let lossCount = 0;
+    
+    weekViewItems.forEach(({ dayData }) => {
+      if (dayData) {
+        totalPnl += dayData.pnl;
+        tradeCount += dayData.tradeCount;
+        winCount += dayData.winCount;
+        lossCount += dayData.lossCount;
+      }
+    });
+    
+    setWeekViewStats({
+      totalPnl,
+      tradeCount,
+      winCount,
+      lossCount,
+      winRate: winCount + lossCount > 0 ? (winCount / (winCount + lossCount)) * 100 : 0
+    });
+  }, [currentWeekStart, dayData]);
+
+  // Format date for mobile view (shorter format)
+  const formatMobileDate = (date: Date) => {
+    return date.toLocaleDateString('en-US', { 
+      weekday: 'short', 
+      month: 'short', 
+      day: 'numeric' 
+    });
+  };
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -550,7 +662,7 @@ export default function JournalPage() {
             value={selectedAccountType}
             onValueChange={setSelectedAccountType}
           >
-            <SelectTrigger className="w-[130px] h-9">
+            <SelectTrigger className="w-[110px] h-8 text-sm">
               <SelectValue placeholder="Account Type" />
             </SelectTrigger>
             <SelectContent>
@@ -565,7 +677,7 @@ export default function JournalPage() {
             value={selectedAccountId}
             onValueChange={setSelectedAccountId}
           >
-            <SelectTrigger className="w-[160px] h-9">
+            <SelectTrigger className="w-[140px] h-8 text-sm">
               <SelectValue placeholder="Select Account" />
             </SelectTrigger>
             <SelectContent>
@@ -581,16 +693,16 @@ export default function JournalPage() {
       </div>
       
       <div className="flex items-center justify-between mb-2">
-        <div className="flex gap-1.5 text-sm">
-          <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-muted/50">
+        <div className="flex flex-wrap gap-1.5 text-sm">
+          <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-muted/50">
             <Badge variant="outline" className="bg-green-500 h-2 w-2 p-0 rounded-full border-0" />
             <span>Profit</span>
           </div>
-          <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-muted/50">
+          <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-muted/50">
             <Badge variant="outline" className="bg-red-500 h-2 w-2 p-0 rounded-full border-0" />
             <span>Loss</span>
           </div>
-          <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-muted/50">
+          <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-muted/50">
             <span className="text-[10px] font-medium">3W/2L</span>
             <span>Win/Loss Count</span>
           </div>
@@ -598,6 +710,219 @@ export default function JournalPage() {
       </div>
       
       <div className="grid gap-4 md:grid-cols-3">
+        {/* Mobile-specific weekly calendar view */}
+        {isMobile ? (
+          <Card className="md:col-span-2 border-muted-foreground/10">
+            <CardHeader className="pb-1 pt-2 px-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base flex items-center">
+                  <CalendarDays className="h-4 w-4 mr-2" />
+                  Weekly View
+                </CardTitle>
+              </div>
+              <div className="text-center mt-1 text-sm">
+                <div>Weekly P/L: <span className={cn(
+                  "font-medium",
+                  weekViewStats.totalPnl < 0 ? "text-red-500" : "text-green-500"
+                )}>{formatCurrency(weekViewStats.totalPnl)}</span></div>
+              </div>
+            </CardHeader>
+            <CardContent className="px-3 pt-0 pb-2">
+              <div>
+                {/* First group of 3 days */}
+                <div className="grid grid-cols-3 gap-1 mb-1">
+                  {weekViewData.slice(0, 3).map((dayInfo, index) => {
+                    const { date, dayData: info } = dayInfo;
+                    const hasTrades = info && info.tradeCount > 0;
+                    const isToday = date.toDateString() === new Date().toDateString();
+                    
+                    return (
+                      <div 
+                        key={index}
+                        className="relative"
+                      >
+                        <div className="pt-[100%]"></div> {/* Creates a square aspect ratio */}
+                        <div 
+                          className={cn(
+                            "absolute inset-0 p-1 flex flex-col rounded-md transition-colors",
+                            hasTrades ? "cursor-pointer" : "cursor-default",
+                            info?.pnl > 0 ? "bg-green-950/20" : 
+                            info?.pnl < 0 ? "bg-red-950/20" : 
+                            "bg-muted/20",
+                            isToday && "ring-1 ring-primary"
+                          )}
+                          onClick={() => hasTrades ? handleDaySelect(date) : null}
+                        >
+                          <div className={cn(
+                            "text-center text-xs font-medium",
+                            isToday && "text-primary"
+                          )}>
+                            {date.getDate()}
+                          </div>
+                          
+                          {hasTrades ? (
+                            <div className="mt-auto space-y-0.5 text-center">
+                              <div className={cn(
+                                "text-xs font-medium",
+                                info.pnl > 0 ? "text-green-500" : "text-red-500"
+                              )}>
+                                {formatCurrency(info.pnl)}
+                              </div>
+                              <div className="text-[10px] text-muted-foreground">
+                                {info.winCount > 0 && <span className="text-green-500">{info.winCount}W</span>}
+                                {info.winCount > 0 && info.lossCount > 0 && '/'}
+                                {info.lossCount > 0 && <span className="text-red-500">{info.lossCount}L</span>}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="mt-auto text-center">
+                              <div className="text-[10px] text-muted-foreground">No trades</div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                
+                {/* Second group of 3 days */}
+                <div className="grid grid-cols-3 gap-1 mb-1">
+                  {weekViewData.slice(3, 6).map((dayInfo, index) => {
+                    const { date, dayData: info } = dayInfo;
+                    const hasTrades = info && info.tradeCount > 0;
+                    const isToday = date.toDateString() === new Date().toDateString();
+                    
+                    return (
+                      <div 
+                        key={index + 3}
+                        className="relative"
+                      >
+                        <div className="pt-[100%]"></div> {/* Creates a square aspect ratio */}
+                        <div 
+                          className={cn(
+                            "absolute inset-0 p-1 flex flex-col rounded-md transition-colors",
+                            hasTrades ? "cursor-pointer" : "cursor-default",
+                            info?.pnl > 0 ? "bg-green-950/20" : 
+                            info?.pnl < 0 ? "bg-red-950/20" : 
+                            "bg-muted/20",
+                            isToday && "ring-1 ring-primary"
+                          )}
+                          onClick={() => hasTrades ? handleDaySelect(date) : null}
+                        >
+                          <div className={cn(
+                            "text-center text-xs font-medium",
+                            isToday && "text-primary"
+                          )}>
+                            {date.getDate()}
+                          </div>
+                          
+                          {hasTrades ? (
+                            <div className="mt-auto space-y-0.5 text-center">
+                              <div className={cn(
+                                "text-xs font-medium",
+                                info.pnl > 0 ? "text-green-500" : "text-red-500"
+                              )}>
+                                {formatCurrency(info.pnl)}
+                              </div>
+                              <div className="text-[10px] text-muted-foreground">
+                                {info.winCount > 0 && <span className="text-green-500">{info.winCount}W</span>}
+                                {info.winCount > 0 && info.lossCount > 0 && '/'}
+                                {info.lossCount > 0 && <span className="text-red-500">{info.lossCount}L</span>}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="mt-auto text-center">
+                              <div className="text-[10px] text-muted-foreground">No trades</div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                
+                {/* Last row with 1 day cell and navigation controls */}
+                <div className="grid grid-cols-3 gap-1">
+                  {/* The last day cell */}
+                  <div className="relative">
+                    {weekViewData.length >= 7 && (
+                      <>
+                        <div className="pt-[100%]"></div>
+                        <div 
+                          className={cn(
+                            "absolute inset-0 p-1 flex flex-col rounded-md transition-colors",
+                            weekViewData[6].dayData && weekViewData[6].dayData.tradeCount > 0 ? "cursor-pointer" : "cursor-default",
+                            weekViewData[6].dayData?.pnl > 0 ? "bg-green-950/20" : 
+                            weekViewData[6].dayData?.pnl < 0 ? "bg-red-950/20" : 
+                            "bg-muted/20",
+                            weekViewData[6].date.toDateString() === new Date().toDateString() && "ring-1 ring-primary"
+                          )}
+                          onClick={() => weekViewData[6].dayData?.tradeCount ? handleDaySelect(weekViewData[6].date) : null}
+                        >
+                          <div className={cn(
+                            "text-center text-xs font-medium",
+                            weekViewData[6].date.toDateString() === new Date().toDateString() && "text-primary"
+                          )}>
+                            {weekViewData[6].date.getDate()}
+                          </div>
+                          
+                          {weekViewData[6].dayData && weekViewData[6].dayData.tradeCount > 0 ? (
+                            <div className="mt-auto space-y-0.5 text-center">
+                              <div className={cn(
+                                "text-xs font-medium",
+                                weekViewData[6].dayData.pnl > 0 ? "text-green-500" : "text-red-500"
+                              )}>
+                                {formatCurrency(weekViewData[6].dayData.pnl)}
+                              </div>
+                              <div className="text-[10px] text-muted-foreground">
+                                {weekViewData[6].dayData.winCount > 0 && <span className="text-green-500">{weekViewData[6].dayData.winCount}W</span>}
+                                {weekViewData[6].dayData.winCount > 0 && weekViewData[6].dayData.lossCount > 0 && '/'}
+                                {weekViewData[6].dayData.lossCount > 0 && <span className="text-red-500">{weekViewData[6].dayData.lossCount}L</span>}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="mt-auto text-center">
+                              <div className="text-[10px] text-muted-foreground">No trades</div>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  
+                  {/* Navigation controls */}
+                  <div className="col-span-2 flex items-center justify-end gap-1 mt-1">
+                    <Button 
+                      variant="outline" 
+                      size="icon"
+                      onClick={previousWeek}
+                      className="h-8 w-8 rounded-md"
+                    >
+                      <ArrowLeft className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="icon"
+                      onClick={nextWeek}
+                      className="h-8 w-8 rounded-md"
+                    >
+                      <ArrowRight className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={currentWeek}
+                      className="h-8 px-2 ml-1"
+                    >
+                      Today
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          // Desktop monthly calendar view (unchanged)
         <Card className="md:col-span-2 border-muted-foreground/10">
           <CardHeader className="pb-2 pt-4">
             <div className="flex items-center justify-between">
@@ -738,15 +1063,16 @@ export default function JournalPage() {
             </div>
           </CardContent>
         </Card>
+        )}
         
         <div className="space-y-4">
           {selectedDay && selectedDayTrades.length > 0 ? (
             <Card className="bg-card border-muted-foreground/10">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-xl flex items-center justify-between">
+              <CardHeader className={cn("pb-2", isMobile && "pt-2 px-3")}>
+                <CardTitle className={cn("text-xl flex items-center justify-between", isMobile && "text-base")}>
                   <div className="flex items-center gap-2">
-                    <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center">
-                      <CalendarDays className="h-3.5 w-3.5 text-primary" />
+                    <div className={cn("h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center", isMobile && "h-5 w-5")}>
+                      <CalendarDays className={cn("h-3.5 w-3.5 text-primary", isMobile && "h-3 w-3")} />
                     </div>
                     {formatDate(selectedDay)}
                   </div>
@@ -754,23 +1080,24 @@ export default function JournalPage() {
                     variant="ghost" 
                     size="sm" 
                     onClick={() => setSelectedDay(null)}
-                    className="h-8 px-2"
+                    className={cn("h-8 px-2", isMobile && "h-6 px-1")}
                   >
-                    <ArrowLeft className="h-4 w-4 mr-1" /> Back
+                    <ArrowLeft className={cn("h-4 w-4 mr-1", isMobile && "h-3 w-3")} /> Back
                   </Button>
                 </CardTitle>
                 <CardDescription>
                   {selectedDayTrades.length} trade{selectedDayTrades.length !== 1 ? 's' : ''} on this day
                 </CardDescription>
               </CardHeader>
-              <CardContent>
-                <ScrollArea className="h-[450px] px-1">
+              <CardContent className={cn(isMobile && "px-3 py-2")}>
+                <ScrollArea className={cn("h-[450px] px-1", isMobile && "h-[300px]")}>
                   <div className="space-y-2 pr-3">
                     {selectedDayTrades.map((trade) => (
                       <div 
                         key={trade.id} 
                         className={cn(
                           "p-3 rounded-md border bg-background/80 hover:bg-background transition-colors",
+                          isMobile && "p-2",
                           trade.pnl > 0 ? "border-green-500/30" : 
                           trade.pnl < 0 ? "border-red-500/30" : 
                           "border-muted"
@@ -778,7 +1105,7 @@ export default function JournalPage() {
                       >
                         <div className="flex justify-between items-start mb-2">
                           <div className="flex items-center gap-1">
-                            <Badge variant={trade.type === 'long' ? 'default' : 'destructive'} className="h-5">
+                            <Badge variant={trade.type === 'long' ? 'default' : 'destructive'} className={cn("h-5", isMobile && "h-4 text-xs")}>
                               {trade.type === 'long' ? 'Long' : 'Short'}
                             </Badge>
                             <span className="font-bold">{trade.symbol}</span>
@@ -812,61 +1139,76 @@ export default function JournalPage() {
             </Card>
           ) : (
             <Card className="bg-card border-muted-foreground/10">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-xl flex items-center gap-2">
-                  <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center">
-                    <BarChart3 className="h-3.5 w-3.5 text-primary" />
+              <CardHeader className={cn("pb-2", isMobile && "pt-2 px-3")}>
+                <CardTitle className={cn("text-xl flex items-center gap-2", isMobile && "text-base")}>
+                  <div className={cn("h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center", isMobile && "h-5 w-5")}>
+                    <BarChart3 className={cn("h-3.5 w-3.5 text-primary", isMobile && "h-3 w-3")} />
                   </div>
-                  Monthly Summary
+                  {isMobile ? "Weekly Summary" : "Monthly Summary"}
                 </CardTitle>
                 <CardDescription>
-                  Performance for {selectedMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
+                  {isMobile ? (
+                    <>Performance for week of {formatMobileDate(currentWeekStart)} - {formatMobileDate(new Date(currentWeekStart.getTime() + 6 * 24 * 60 * 60 * 1000))}</>
+                  ) : (
+                    <>Performance for {selectedMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}</>
+                  )}
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-2 p-3 bg-background rounded-lg border shadow-sm">
+              <CardContent className={cn("space-y-6", isMobile && "space-y-3 px-3 py-2")}>
+                <div className={cn("space-y-2 p-3 bg-background rounded-lg border shadow-sm", isMobile && "space-y-1 p-2")}>
                   <div className="text-sm font-medium text-muted-foreground flex items-center gap-1">
                     <DollarSign className="h-3.5 w-3.5" />
                     P&L
                   </div>
                   <div className={cn(
                     "text-3xl font-bold flex items-center gap-2",
-                    monthlyStats.totalPnl > 0 ? "text-green-500" : 
-                    monthlyStats.totalPnl < 0 ? "text-red-500" : ""
+                    isMobile && "text-xl gap-1",
+                    isMobile 
+                      ? (weekViewStats.totalPnl > 0 ? "text-green-500" : weekViewStats.totalPnl < 0 ? "text-red-500" : "")
+                      : (monthlyStats.totalPnl > 0 ? "text-green-500" : monthlyStats.totalPnl < 0 ? "text-red-500" : "")
                   )}>
-                    {monthlyStats.totalPnl > 0 ? <TrendingUp className="w-6 h-6" /> : 
-                    monthlyStats.totalPnl < 0 ? <TrendingDown className="w-6 h-6" /> : null}
-                    {formatCurrency(monthlyStats.totalPnl)}
+                    {(isMobile ? weekViewStats.totalPnl : monthlyStats.totalPnl) > 0 ? 
+                      <TrendingUp className={cn("w-6 h-6", isMobile && "w-4 h-4")} /> : 
+                    (isMobile ? weekViewStats.totalPnl : monthlyStats.totalPnl) < 0 ? 
+                      <TrendingDown className={cn("w-6 h-6", isMobile && "w-4 h-4")} /> : null}
+                    {formatCurrency(isMobile ? weekViewStats.totalPnl : monthlyStats.totalPnl)}
                   </div>
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1 p-3 bg-background rounded-lg border shadow-sm">
+                  <div className={cn("space-y-1 p-3 bg-background rounded-lg border shadow-sm", isMobile && "space-y-0.5 p-2")}>
                     <div className="text-sm font-medium text-muted-foreground flex items-center gap-1">
                       <Layers className="h-3.5 w-3.5" />
                       Trades
                     </div>
-                    <div className="text-2xl font-semibold">{monthlyStats.tradeCount}</div>
+                    <div className={cn("text-2xl font-semibold", isMobile && "text-lg")}>
+                      {isMobile ? weekViewStats.tradeCount : monthlyStats.tradeCount}
                   </div>
-                  <div className="space-y-1 p-3 bg-background rounded-lg border shadow-sm">
+                  </div>
+                  <div className={cn("space-y-1 p-3 bg-background rounded-lg border shadow-sm", isMobile && "space-y-0.5 p-2")}>
                     <div className="text-sm font-medium text-muted-foreground flex items-center gap-1">
                       <PieChart className="h-3.5 w-3.5" />
                       Win Rate
                     </div>
-                    <div className="text-2xl font-semibold">
-                      {monthlyStats.winRate.toFixed(1)}%
+                    <div className={cn("text-2xl font-semibold", isMobile && "text-lg")}>
+                      {(isMobile ? weekViewStats.winRate : monthlyStats.winRate).toFixed(1)}%
                     </div>
                   </div>
-                  <div className="space-y-1 p-3 bg-background rounded-lg border shadow-sm">
+                  <div className={cn("space-y-1 p-3 bg-background rounded-lg border shadow-sm", isMobile && "space-y-0.5 p-2")}>
                     <div className="text-sm font-medium text-muted-foreground">Wins</div>
-                    <div className="text-2xl font-semibold text-green-500">{monthlyStats.winCount}</div>
+                    <div className={cn("text-2xl font-semibold text-green-500", isMobile && "text-lg")}>
+                      {isMobile ? weekViewStats.winCount : monthlyStats.winCount}
                   </div>
-                  <div className="space-y-1 p-3 bg-background rounded-lg border shadow-sm">
+                  </div>
+                  <div className={cn("space-y-1 p-3 bg-background rounded-lg border shadow-sm", isMobile && "space-y-0.5 p-2")}>
                     <div className="text-sm font-medium text-muted-foreground">Losses</div>
-                    <div className="text-2xl font-semibold text-red-500">{monthlyStats.lossCount}</div>
+                    <div className={cn("text-2xl font-semibold text-red-500", isMobile && "text-lg")}>
+                      {isMobile ? weekViewStats.lossCount : monthlyStats.lossCount}
+                    </div>
                   </div>
                 </div>
                 
+                {!isMobile && (
                 <div className="pt-4 border-t">
                   <div className="text-sm font-medium mb-3 flex items-center justify-between">
                     <span className="flex items-center gap-1">
@@ -946,6 +1288,7 @@ export default function JournalPage() {
                     ))}
                   </div>
                 </div>
+                )}
               </CardContent>
             </Card>
           )}
@@ -954,11 +1297,11 @@ export default function JournalPage() {
 
       {/* Trading Plan Card - Now full width and below everything */}
       <Card className="bg-card border-muted-foreground/10 mt-6">
-        <CardHeader className="pb-2">
+        <CardHeader className={cn("pb-2", isMobile && "pt-2 px-3")}>
           <div className="flex items-center justify-between">
-            <CardTitle className="text-xl flex items-center gap-2">
-              <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
+            <CardTitle className={cn("text-xl flex items-center gap-2", isMobile && "text-base")}>
+              <div className={cn("h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center", isMobile && "h-5 w-5")}>
+                <svg xmlns="http://www.w3.org/2000/svg" width={isMobile ? "12" : "14"} height={isMobile ? "12" : "14"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
                   <path d="M14 3v4a1 1 0 0 0 1 1h4"></path>
                   <path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"></path>
                   <line x1="9" y1="9" x2="10" y2="9"></line>
@@ -974,19 +1317,19 @@ export default function JournalPage() {
                   variant="ghost" 
                   size="sm" 
                   onClick={cancelEditing}
-                  className="h-8 px-2"
+                  className={cn("h-8 px-2", isMobile && "h-6 px-1 text-xs")}
                   disabled={isSaving}
                 >
-                  <X className="h-4 w-4 mr-1" /> Cancel
+                  <X className={cn("h-4 w-4 mr-1", isMobile && "h-3 w-3")} /> Cancel
                 </Button>
                 <Button 
                   variant="default" 
                   size="sm" 
                   onClick={saveTradingPlan}
-                  className="h-8 px-3"
+                  className={cn("h-8 px-3", isMobile && "h-6 px-2 text-xs")}
                   disabled={isSaving}
                 >
-                  {isSaving ? 'Saving...' : <><Save className="h-4 w-4 mr-1" /> Save</>}
+                  {isSaving ? 'Saving...' : <><Save className={cn("h-4 w-4 mr-1", isMobile && "h-3 w-3")} /> Save</>}
                 </Button>
               </div>
             ) : (
@@ -994,9 +1337,9 @@ export default function JournalPage() {
                 variant="outline" 
                 size="sm" 
                 onClick={() => setIsEditingPlan(true)}
-                className="h-8 px-3"
+                className={cn("h-8 px-3", isMobile && "h-6 px-2 text-xs")}
               >
-                <Edit className="h-4 w-4 mr-1" /> Edit Plan
+                <Edit className={cn("h-4 w-4 mr-1", isMobile && "h-3 w-3")} /> Edit Plan
               </Button>
             )}
           </div>
@@ -1004,9 +1347,9 @@ export default function JournalPage() {
             {isEditingPlan ? 'Edit your trading strategy to improve performance' : 'Reference your trading strategy while analyzing trades'}
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className={cn(isMobile && "px-3 py-2")}>
           <Tabs defaultValue="concepts" className="w-full">
-            <TabsList className="grid w-full grid-cols-3 max-w-md">
+            <TabsList className={cn("grid w-full grid-cols-3 max-w-md", isMobile && "mobile-tabs-scroll h-8 text-xs")}>
               <TabsTrigger value="concepts">Concepts</TabsTrigger>
               <TabsTrigger value="rules">Entry Rules</TabsTrigger>
               <TabsTrigger value="risk">Risk Mgmt</TabsTrigger>

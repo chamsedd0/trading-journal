@@ -317,9 +317,9 @@ export default function AccountsPage() {
           </div>
           
           <Link href="/dashboard/accounts/new">
-            <Button className="shadow-sm">
-              <Plus className="h-4 w-4 mr-2" />
-              Add Account
+            <Button className="shadow-sm mobile-icon-only">
+              <Plus className="h-4 w-4" />
+              <span className="button-text ml-2">Add Account</span>
             </Button>
           </Link>
         </div>
@@ -449,16 +449,16 @@ export default function AccountsPage() {
             <LineChartIcon className="mr-2 h-5 w-5" />
             Historical P&L Performance
           </CardTitle>
-          <CardDescription className="flex justify-between items-center">
+          <CardDescription className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
             <span>Daily balance changes from first trade</span>
-            <div className="flex items-center space-x-1">
+            <div className="flex items-center space-x-1 mobile-icon-only">
               <Button 
                 variant="outline" 
                 size="sm" 
                 className={cn("h-7 px-2 text-xs", chartTimeframe === 'week' && "bg-muted")}
                 onClick={() => handleTimeframeChange('week')}
               >
-                At least 7 days
+                <span className="button-text">7D</span>
               </Button>
               <Button 
                 variant="outline" 
@@ -466,7 +466,7 @@ export default function AccountsPage() {
                 className={cn("h-7 px-2 text-xs", chartTimeframe === 'month' && "bg-muted")}
                 onClick={() => handleTimeframeChange('month')}
               >
-                At least 30 days
+                <span className="button-text">30D</span>
               </Button>
               <Button 
                 variant="outline" 
@@ -474,7 +474,7 @@ export default function AccountsPage() {
                 className={cn("h-7 px-2 text-xs", chartTimeframe === 'year' && "bg-muted")}
                 onClick={() => handleTimeframeChange('year')}
               >
-                At least 1 year
+                <span className="button-text">1Y</span>
               </Button>
             </div>
           </CardDescription>
@@ -508,7 +508,7 @@ export default function AccountsPage() {
       
       {/* Tabs for filtering accounts by type */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-8">
-        <TabsList className="mb-6 w-full justify-start">
+        <TabsList className="mb-6 w-full justify-start mobile-tabs-scroll">
           <TabsTrigger value="all" className="flex items-center gap-2">
             <Briefcase className="h-4 w-4" />
             <span>All Accounts <span className="ml-1 text-xs">({accountStats.length})</span></span>
@@ -543,7 +543,10 @@ export default function AccountsPage() {
                       : `You don't have any ${activeTab} accounts yet.`}
                 </p>
                 <Link href="/dashboard/accounts/new">
-                  <Button>Add Trading Account</Button>
+                  <Button className="mobile-icon-only">
+                    <Plus className="h-4 w-4" />
+                    <span className="button-text ml-2">Add Trading Account</span>
+                  </Button>
                 </Link>
               </CardContent>
             </Card>

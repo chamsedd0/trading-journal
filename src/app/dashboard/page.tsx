@@ -558,9 +558,14 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Dashboard</h1>
+    <div className="space-y-8 mt-4 md:mt-0">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 md:gap-0">
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold">Dashboard</h1>
+          <div className="text-2xl font-bold md:hidden">
+            ${Number(tradeStats.totalBalance).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+          </div>
+        </div>
         
         <div className="flex gap-3">
           <Link href="/dashboard/accounts/new">
@@ -574,14 +579,14 @@ export default function DashboardPage() {
               New Account
             </Button>
           </Link>
-        <Link href="/dashboard/trades/new">
+          <Link href="/dashboard/trades/new">
             <Button className="shadow-sm">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2">
                 <path d="M12 5v14M5 12h14" />
               </svg>
               New Trade
             </Button>
-        </Link>
+          </Link>
         </div>
       </div>
       
@@ -595,7 +600,7 @@ export default function DashboardPage() {
               </svg>
               Performance Overview
             </CardTitle>
-            <div className="text-3xl font-bold">
+            <div className="hidden md:block text-3xl font-bold">
               ${Number(tradeStats.totalBalance).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
             </div>
           </div>
