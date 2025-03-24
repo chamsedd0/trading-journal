@@ -15,6 +15,7 @@ import {
   limit,
   addDoc,
   updateDoc,
+  deleteDoc,
   onSnapshot,
   Timestamp,
   serverTimestamp,
@@ -24,8 +25,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { ArrowLeft, Send, User, Check, CheckCheck } from 'lucide-react';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import { ArrowLeft, Send, User, Check, CheckCheck, Trash2, MoreVertical } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -392,6 +393,51 @@ export default function ChatPage() {
     }
   };
   
+  // Add new function to delete/unsend a message
+  const deleteMessage = async (messageId: string, isSentByMe: boolean) => {
+    if (!user || !threadId) return;
+    
+    // Only allow deleting your own messages
+    if (!isSentByMe) {
+      toast.error("You can only delete your own messages");
+      return;
+    }
+    
+    try {
+      // Delete the message from the database
+      const messageRef = doc(db, 'messages', messageId);
+      await deleteDoc(messageRef);
+      
+      // Update the local state
+      setMessages(prev => prev.filter(m => m.id !== messageId));
+      
+      // If this was the last message in the thread, update the thread's last message
+      const remainingMessages = messages.filter(m => m.id !== messageId);
+      
+      if (remainingMessages.length > 0 && messages[messages.length - 1].id === messageId) {
+        // Get the new last message
+        const newLastMessage = remainingMessages[remainingMessages.length - 1];
+        
+        // Update the thread with the new last message
+        await updateDoc(doc(db, 'messageThreads', threadId as string), {
+          lastMessage: newLastMessage.content,
+          updatedAt: newLastMessage.createdAt
+        });
+      } else if (remainingMessages.length === 0) {
+        // If there are no messages left, update with empty message
+        await updateDoc(doc(db, 'messageThreads', threadId as string), {
+          lastMessage: "No messages",
+          updatedAt: serverTimestamp()
+        });
+      }
+      
+      toast.success("Message deleted");
+    } catch (error) {
+      console.error('Error deleting message:', error);
+      toast.error('Failed to delete message');
+    }
+  };
+  
   if (loading) {
     return (
       <div className="flex flex-col h-full">
@@ -446,12 +492,10 @@ export default function ChatPage() {
       </div>
       
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto min-h-[300px] max-h-[calc(100vh-160px)] p-3 sm:p-4">
-        <div className="h-full max-w-3xl mx-auto flex flex-col-reverse">
-          <div ref={messagesEndRef} />
-          
+      <ScrollArea className="flex-1 h-full max-h-[500px] overflow-y-auto" type="always" scrollHideDelay={0}>
+        <div className="p-4 sm:p-6 max-w-4xl mx-auto">
           {messages.length === 0 ? (
-            <div className="text-center py-12 px-4 flex-shrink-0">
+            <div className="text-center py-12 px-4">
               <div className="p-4 bg-muted inline-flex rounded-full mb-4">
                 <User className="h-10 w-10 text-muted-foreground" />
               </div>
@@ -461,10 +505,9 @@ export default function ChatPage() {
               </p>
             </div>
           ) : (
-            <div className="space-y-6 flex-shrink-0">
-              {/* Group messages by date - in reverse chronological order for flex-col-reverse */}
+            <div className="space-y-8">
+              {/* Group messages by date */}
               {Array.from(new Set(messages.map(m => getMessageDateGroup(m.createdAt))))
-                .reverse()
                 .map((dateGroup, index) => {
                   const dateMessages = messages
                     .filter(m => getMessageDateGroup(m.createdAt) === dateGroup)
@@ -477,27 +520,30 @@ export default function ChatPage() {
                     <div key={dateGroup || index}>
                       <div className="relative flex items-center justify-center my-6">
                         <div className="absolute inset-0 flex items-center">
-                          <div className="w-full border-t border-muted-foreground/20"></div>
+                          <div className="w-full border-t border-muted-foreground/10"></div>
                         </div>
-                        <div className="relative bg-background px-2 text-xs text-muted-foreground">
+                        <div className="relative bg-background px-3 py-1 text-xs rounded-full border border-muted-foreground/10 text-muted-foreground">
                           {getDateDisplay(dateGroup)}
                         </div>
                       </div>
                       
-                      <div className="space-y-4">
-                        {dateMessages.map((message) => {
+                      <div className="space-y-3">
+                        {dateMessages.map((message, i) => {
                           const isSentByMe = message.senderId === user?.uid;
+                          const isFirstInGroup = i === 0 || dateMessages[i-1].senderId !== message.senderId;
+                          const isLastInGroup = i === dateMessages.length - 1 || dateMessages[i+1].senderId !== message.senderId;
                           
                           return (
                             <div 
                               key={message.id} 
                               className={cn(
-                                "flex gap-2",
-                                isSentByMe ? "justify-end" : "justify-start"
+                                "flex gap-2 group",
+                                isSentByMe ? "justify-end" : "justify-start",
+                                !isLastInGroup ? "mb-1" : ""
                               )}
                             >
-                              {!isSentByMe && (
-                                <Avatar className="h-8 w-8 flex-shrink-0 mt-1 border ">
+                              {!isSentByMe && isFirstInGroup && (
+                                <Avatar className="h-8 w-8 flex-shrink-0 mt-1 border">
                                   <AvatarImage src={trader?.photoURL} />
                                   <AvatarFallback className="bg-primary/10">
                                     {trader?.displayName.charAt(0).toUpperCase()}
@@ -505,29 +551,47 @@ export default function ChatPage() {
                                 </Avatar>
                               )}
                               
-                              <div 
-                                className={cn(
-                                  "max-w-[80%] rounded-lg px-3 py-2 text-sm break-words",
-                                  isSentByMe
-                                    ? "bg-primary text-primary-foreground rounded-tr-none"
-                                    : "bg-muted rounded-tl-none"
-                                )}
-                              >
-                                <div className="whitespace-pre-wrap">{message.content}</div>
+                              {!isSentByMe && !isFirstInGroup && (
+                                <div className="w-8 flex-shrink-0"></div>
+                              )}
+                              
+                              <div className="relative max-w-[85%]">
                                 <div 
                                   className={cn(
-                                    "text-[11px] mt-1 text-right",
+                                    "rounded-xl px-4 py-2.5 text-sm shadow-sm border",
                                     isSentByMe
-                                      ? "text-primary-foreground/80"
-                                      : "text-muted-foreground"
+                                      ? "bg-primary text-primary-foreground border-primary/30 rounded-tr-none"
+                                      : "bg-background rounded-tl-none border-border"
                                   )}
                                 >
-                                  {formatMessageDate(message.createdAt)}
+                                  <div className="whitespace-pre-wrap">{message.content}</div>
+                                  
+                                  <div 
+                                    className={cn(
+                                      "text-[10px] mt-1 text-right flex items-center justify-end gap-1",
+                                      isSentByMe
+                                        ? "text-primary-foreground/70"
+                                        : "text-muted-foreground"
+                                    )}
+                                  >
+                                    {formatMessageDate(message.createdAt)}
+                                  </div>
                                 </div>
+                                
+                                {/* Delete button for own messages - visible on hover */}
+                                {isSentByMe && (
+                                  <button
+                                    className="absolute -top-2 -right-2 p-1 rounded-full bg-background/95 border border-border shadow-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10 hover:border-destructive/30"
+                                    onClick={() => deleteMessage(message.id, isSentByMe)}
+                                    aria-label="Delete message"
+                                  >
+                                    <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
+                                  </button>
+                                )}
                               </div>
                               
                               {isSentByMe && (
-                                <div className="flex items-center self-end ml-1">
+                                <div className="flex items-center self-end mb-1 ml-1">
                                   {message.read ? (
                                     <CheckCheck className="h-3 w-3 text-primary" />
                                   ) : message.delivered ? (
@@ -544,10 +608,14 @@ export default function ChatPage() {
                     </div>
                   );
                 })}
+              <div ref={messagesEndRef} />
             </div>
           )}
         </div>
-      </div>
+        
+        {/* This makes the scrollbar invisible */}
+        <ScrollBar className="w-0 opacity-0" />
+      </ScrollArea>
       
       {/* Message input */}
       <div className="p-3 sm:p-4 border-t bg-background/95">
@@ -556,19 +624,19 @@ export default function ChatPage() {
             placeholder={`Message ${trader?.displayName || 'trader'}...`}
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
-            className="flex-1 h-10 sm:h-11 shadow-sm"
+            className="flex-1 h-12 shadow-sm rounded-full border-muted px-4"
             disabled={sending}
           />
           <Button 
             type="submit" 
             size="icon" 
-            className="h-10 w-10 sm:h-11 sm:w-11 shadow-sm flex-shrink-0"
+            className="h-12 w-12 rounded-full shadow-sm flex-shrink-0"
             disabled={!newMessage.trim() || sending}
           >
             {sending ? (
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-current border-t-transparent" />
             ) : (
-              <Send className="h-4 w-4" />
+              <Send className="h-5 w-5" />
             )}
           </Button>
         </form>

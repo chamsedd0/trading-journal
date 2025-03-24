@@ -14,7 +14,8 @@ import {
   getDocs,
   Timestamp,
   updateDoc,
-  addDoc
+  addDoc,
+  writeBatch
 } from 'firebase/firestore';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -23,7 +24,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { MessageSquare, Search, PlusCircle } from 'lucide-react';
+import { MessageSquare, Search, PlusCircle, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -300,6 +301,45 @@ export default function MessagesPage() {
     }
   };
   
+  // Add a new function to handle conversation deletion
+  const deleteConversation = async (threadId: string) => {
+    if (!user) return;
+    
+    // Confirm with the user
+    if (!window.confirm('Are you sure you want to delete this conversation? This cannot be undone.')) {
+      return;
+    }
+    
+    try {
+      // First, get the thread to get the messages
+      const messagesQuery = query(
+        collection(db, 'messages'),
+        where('threadId', '==', threadId)
+      );
+      
+      const messagesSnapshot = await getDocs(messagesQuery);
+      const batch = writeBatch(db);
+      
+      // Delete all messages
+      messagesSnapshot.forEach((messageDoc) => {
+        batch.delete(messageDoc.ref);
+      });
+      
+      // Delete the thread
+      batch.delete(doc(db, 'messageThreads', threadId));
+      
+      await batch.commit();
+      
+      // Update local state
+      setChatPreviews(prev => prev.filter(chat => chat.threadId !== threadId));
+      
+      toast.success('Conversation deleted');
+    } catch (error) {
+      console.error('Error deleting conversation:', error);
+      toast.error('Failed to delete conversation');
+    }
+  };
+  
   if (loading) {
     return (
       <div className="flex flex-col space-y-4 p-3 sm:p-4 max-w-screen-lg mx-auto">
@@ -489,42 +529,56 @@ export default function MessagesPage() {
               </div>
               <div className="space-y-2 sm:space-y-3 max-h-[calc(100vh-220px)] overflow-y-auto pr-1">
                 {filteredChatPreviews.map((chat) => (
-                  <Link 
-                    key={chat.traderId} 
-                    href={`/dashboard/messages/${chat.threadId}`}
-                    className="block touch-manipulation"
-                  >
-                    <div className={`p-3 sm:p-4 rounded-xl border ${chat.unreadCount > 0 ? 'bg-primary/5 border-primary/20' : 'hover:bg-muted/20 border-muted/40'} transition-colors`}>
-                      <div className="flex items-center gap-3">
-                        <div className="relative flex-shrink-0">
-                          <Avatar className="h-11 w-11 border border-muted">
-                            <AvatarImage src={chat.photoURL} />
-                            <AvatarFallback className="bg-primary/10 text-primary-foreground">
-                              {chat.displayName.charAt(0).toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          {chat.unreadCount > 0 && (
-                            <span className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-medium text-primary-foreground ring-2 ring-background">
-                              {chat.unreadCount}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between mb-1">
-                            <h3 className={`text-sm ${chat.unreadCount > 0 ? 'font-bold' : 'font-medium'}`}>
-                              {chat.displayName}
-                            </h3>
-                            <span className="text-xs text-muted-foreground whitespace-nowrap ml-2 tabular-nums">
-                              {formatTimestamp(chat.timestamp)}
-                            </span>
+                  <div key={chat.traderId} className="relative group">
+                    <Link 
+                      href={`/dashboard/messages/${chat.threadId}`}
+                      className="block touch-manipulation"
+                    >
+                      <div className={`p-3 sm:p-4 rounded-xl border ${chat.unreadCount > 0 ? 'bg-primary/5 border-primary/20' : 'hover:bg-muted/20 border-muted/40'} transition-colors`}>
+                        <div className="flex items-center gap-3">
+                          <div className="relative flex-shrink-0">
+                            <Avatar className="h-11 w-11 border border-muted">
+                              <AvatarImage src={chat.photoURL} />
+                              <AvatarFallback className="bg-primary/10 text-primary-foreground">
+                                {chat.displayName.charAt(0).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            {chat.unreadCount > 0 && (
+                              <span className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-medium text-primary-foreground ring-2 ring-background">
+                                {chat.unreadCount}
+                              </span>
+                            )}
                           </div>
-                          <p className={`text-xs sm:text-sm truncate max-w-full ${chat.unreadCount > 0 ? 'text-foreground' : 'text-muted-foreground'}`}>
-                            {chat.lastMessage}
-                          </p>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between mb-1">
+                              <h3 className={`text-sm ${chat.unreadCount > 0 ? 'font-bold' : 'font-medium'}`}>
+                                {chat.displayName}
+                              </h3>
+                              <span className="text-xs text-muted-foreground whitespace-nowrap ml-2 tabular-nums">
+                                {formatTimestamp(chat.timestamp)}
+                              </span>
+                            </div>
+                            <p className={`text-xs sm:text-sm truncate max-w-full ${chat.unreadCount > 0 ? 'text-foreground' : 'text-muted-foreground'}`}>
+                              {chat.lastMessage}
+                            </p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </Link>
+                    </Link>
+                    
+                    {/* Delete button - appears on hover */}
+                    <button 
+                      className="absolute top-2 right-2 p-1.5 rounded-full bg-background/90 border border-muted/20 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10 hover:border-destructive/30"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        deleteConversation(chat.threadId);
+                      }}
+                      aria-label="Delete conversation"
+                    >
+                      <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>

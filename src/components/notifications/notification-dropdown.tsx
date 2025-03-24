@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth-context';
-import { Bell } from 'lucide-react';
+import { Bell, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -13,6 +13,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+  SheetClose,
+} from '@/components/ui/sheet';
 import {
   collection,
   query,
@@ -37,6 +45,10 @@ import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { playNotificationSound, initAudio } from '@/lib/notification-sound';
+import { useIsMobile } from '@/hooks/use-media-query';
+
+// Add this at the top to check if window is defined (for SSR)
+const isClient = typeof window !== 'undefined';
 
 interface Notification {
   id: string;
@@ -50,6 +62,229 @@ interface Notification {
   messageContent?: string;
 }
 
+// Function to render notification item (used in both mobile and desktop)
+function NotificationItem({
+  notification,
+  onDelete,
+  onClick,
+}: {
+  notification: Notification;
+  onDelete: (id: string) => void;
+  onClick: (notification: Notification) => void;
+}) {
+  // Function to format notification time
+  const formatNotificationTime = (timestamp: Timestamp) => {
+    const now = new Date();
+    const notificationDate = timestamp.toDate();
+    const diffMs = now.getTime() - notificationDate.getTime();
+    const diffMins = Math.round(diffMs / 60000);
+    const diffHours = Math.round(diffMs / 3600000);
+    const diffDays = Math.round(diffMs / 86400000);
+    
+    if (diffMins < 1) {
+      return 'Just now';
+    } else if (diffMins < 60) {
+      return `${diffMins}m ago`;
+    } else if (diffHours < 24) {
+      return `${diffHours}h ago`;
+    } else if (diffDays === 1) {
+      return 'Yesterday';
+    } else if (diffDays < 7) {
+      return `${diffDays}d ago`;
+    } else {
+      return notificationDate.toLocaleDateString();
+    }
+  };
+  
+  // Get notification message based on type
+  const getNotificationMessage = (notification: Notification) => {
+    switch (notification.type) {
+      case 'connection_request':
+        return `${notification.fromUserName} sent you a connection request`;
+      case 'connection_accepted':
+        return `${notification.fromUserName} accepted your connection request`;
+      case 'message':
+        return `${notification.fromUserName}: ${notification.messageContent}`;
+      default:
+        return 'You have a new notification';
+    }
+  };
+  
+  // Get notification icon based on type
+  const getNotificationIcon = (type: string) => {
+    switch (type) {
+      case 'connection_request':
+        return <UserPlus className="h-4 w-4 text-primary" />;
+      case 'connection_accepted':
+        return <Check className="h-4 w-4 text-primary" />;
+      case 'message':
+        return <MessageSquare className="h-4 w-4 text-primary" />;
+      default:
+        return <Bell className="h-4 w-4 text-primary" />;
+    }
+  };
+  
+  return (
+    <div 
+      key={notification.id} 
+      className={cn(
+        "p-3 flex items-start gap-2 cursor-pointer border-b last:border-0 border-border/50",
+        !notification.read && "bg-muted/40"
+      )}
+      onClick={() => onClick(notification)}
+    >
+      {/* Message notification */}
+      {notification.type === 'message' && (
+        <div className="flex items-start gap-2 w-full">
+          <Avatar className="h-9 w-9 flex-shrink-0">
+            <AvatarImage src={notification.fromUserPhoto} />
+            <AvatarFallback className="bg-primary/10">
+              {notification.fromUserName.charAt(0).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+          <div className="flex-1 space-y-1">
+            <div className="flex justify-between items-start gap-2">
+              <span className="font-medium text-sm">{notification.fromUserName}</span>
+              <span className="text-xs text-muted-foreground whitespace-nowrap">
+                {formatNotificationTime(notification.createdAt)}
+              </span>
+            </div>
+            <div className="flex items-start gap-1">
+              <MessageSquare className="h-3 w-3 text-primary mt-0.5 flex-shrink-0" />
+              <p className="text-sm text-muted-foreground flex-1 line-clamp-2">
+                {notification.messageContent || 'Sent you a message'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Other notification types */}
+      {notification.type !== 'message' && (
+        <div className="flex-1 space-y-1 w-full">
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-1.5">
+              {getNotificationIcon(notification.type)}
+              <p className="font-semibold text-sm">
+                {notification.fromUserName}
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-muted-foreground whitespace-nowrap">
+                {formatNotificationTime(notification.createdAt)}
+              </span>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-6 w-6"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(notification.id);
+                }}
+              >
+                <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+              </Button>
+            </div>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            {getNotificationMessage(notification)}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Mobile notification drawer component
+function MobileNotificationDrawer({
+  notifications,
+  hasUnread,
+  clearAllNotifications,
+  deleteNotification,
+  handleNotificationClick,
+  markAllAsRead,
+}: {
+  notifications: Notification[];
+  hasUnread: boolean;
+  clearAllNotifications: () => void;
+  deleteNotification: (id: string) => void;
+  handleNotificationClick: (notification: Notification) => void;
+  markAllAsRead: () => void;
+}) {
+  const { user } = useAuth();
+  const [isOpen, setIsOpen] = useState(false);
+  
+  // When drawer is opened, mark notifications as read
+  const handleOpenChange = (open: boolean) => {
+    setIsOpen(open);
+    if (open && hasUnread) {
+      markAllAsRead();
+    }
+  };
+  
+  return (
+    <Sheet open={isOpen} onOpenChange={handleOpenChange}>
+      <SheetTrigger asChild>
+        <Button variant="ghost" size="icon" className="text-muted-foreground relative">
+          <Bell className="h-5 w-5" />
+          {(hasUnread || user?.profile?.hasUnreadNotifications) && (
+            <span className="absolute -top-0.5 -right-0.5 flex h-3 w-3">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/75 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
+            </span>
+          )}
+        </Button>
+      </SheetTrigger>
+      <SheetContent side="right" className="p-0 w-full max-w-md sm:max-w-lg">
+        <SheetHeader className="sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b px-4 py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <SheetClose asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8 mr-1">
+                  <ArrowLeft className="h-4 w-4" />
+                  <span className="sr-only">Close</span>
+                </Button>
+              </SheetClose>
+              <SheetTitle className="text-lg font-semibold m-0">Notifications</SheetTitle>
+            </div>
+            {notifications.length > 0 && (
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-8 px-2 text-xs" 
+                onClick={clearAllNotifications}
+              >
+                Clear all
+              </Button>
+            )}
+          </div>
+        </SheetHeader>
+        
+        <ScrollArea className="h-[calc(100vh-64px)] w-full">
+          <div className="divide-y divide-border/50">
+            {notifications.length > 0 ? (
+              notifications.map((notification) => (
+                <NotificationItem 
+                  key={notification.id}
+                  notification={notification}
+                  onDelete={deleteNotification}
+                  onClick={handleNotificationClick}
+                />
+              ))
+            ) : (
+              <div className="py-12 text-center">
+                <div className="bg-muted/40 h-12 w-12 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Bell className="h-5 w-5 text-muted-foreground" />
+                </div>
+                <p className="text-muted-foreground">No notifications</p>
+              </div>
+            )}
+          </div>
+        </ScrollArea>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 export function NotificationDropdown() {
   const { user, setHasUnreadNotifications } = useAuth();
   const router = useRouter();
@@ -57,6 +292,9 @@ export function NotificationDropdown() {
   const [hasUnread, setHasUnread] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
+  
+  // Use the hook for mobile detection
+  const isMobile = useIsMobile();
   
   // Initialize audio on first user interaction
   useEffect(() => {
@@ -240,7 +478,7 @@ export function NotificationDropdown() {
           break;
         
         case 'connection_accepted':
-          router.push(`/dashboard/traders/${notification.fromUserId}`);
+          router.push(`/dashboard/traders/profile/${notification.fromUserId}`);
           break;
         
         case 'message': {
@@ -290,17 +528,17 @@ export function NotificationDropdown() {
     setIsOpen(false);
   };
   
-  // Get notification icon based on type
-  const getNotificationIcon = (type: string) => {
-    switch (type) {
+  // Get notification message based on type
+  const getNotificationMessage = (notification: Notification) => {
+    switch (notification.type) {
       case 'connection_request':
-        return <UserPlus className="h-4 w-4 text-primary" />;
+        return `${notification.fromUserName} sent you a connection request`;
       case 'connection_accepted':
-        return <Check className="h-4 w-4 text-primary" />;
+        return `${notification.fromUserName} accepted your connection request`;
       case 'message':
-        return <MessageSquare className="h-4 w-4 text-primary" />;
+        return `${notification.fromUserName}: ${notification.messageContent}`;
       default:
-        return <Bell className="h-4 w-4 text-primary" />;
+        return 'You have a new notification';
     }
   };
   
@@ -328,19 +566,19 @@ export function NotificationDropdown() {
     }
   };
   
-  // Get notification message based on type
-  const getNotificationMessage = (notification: Notification) => {
-    switch (notification.type) {
-      case 'connection_request':
-        return `${notification.fromUserName} sent you a connection request`;
-      case 'connection_accepted':
-        return `${notification.fromUserName} accepted your connection request`;
-      case 'message':
-        return `${notification.fromUserName}: ${notification.messageContent}`;
-      default:
-        return 'You have a new notification';
-    }
-  };
+  // Render desktop or mobile version based on screen size
+  if (isMobile) {
+    return (
+      <MobileNotificationDrawer
+        notifications={notifications}
+        hasUnread={hasUnread}
+        clearAllNotifications={clearAllNotifications}
+        deleteNotification={deleteNotification}
+        handleNotificationClick={handleNotificationClick}
+        markAllAsRead={markAllAsRead}
+      />
+    );
+  }
   
   return (
     <DropdownMenu open={isOpen} onOpenChange={handleOpenChange}>
@@ -374,81 +612,12 @@ export function NotificationDropdown() {
           <DropdownMenuGroup>
             {notifications.length > 0 ? (
               notifications.map((notification) => (
-                <DropdownMenuItem 
-                  key={notification.id} 
-                  className={cn(
-                    "p-3 flex items-start gap-2 cursor-pointer",
-                    !notification.read && "bg-muted/40"
-                  )}
-                  onClick={() => handleNotificationClick(notification)}
-                >
-                  {/* Message notification */}
-                  {notification.type === 'message' && (
-                    <div className="flex items-start gap-2">
-                      <Avatar className="h-9 w-9 flex-shrink-0">
-                        <AvatarImage src={notification.fromUserPhoto} />
-                        <AvatarFallback className="bg-primary/10">
-                          {notification.fromUserName.charAt(0).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 space-y-1">
-                        <div className="flex justify-between items-start gap-2">
-                          <span className="font-medium text-sm">{notification.fromUserName}</span>
-                          <span className="text-xs text-muted-foreground whitespace-nowrap">
-                            {formatNotificationTime(notification.createdAt)}
-                          </span>
-                        </div>
-                        <div className="flex items-start gap-1">
-                          <MessageSquare className="h-3 w-3 text-primary mt-0.5 flex-shrink-0" />
-                          <p className="text-sm text-muted-foreground flex-1 line-clamp-2">
-                            {notification.messageContent || 'Sent you a message'}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  {/* Other notification types */}
-                  {notification.type !== 'message' && (
-                    <div className="flex-1 space-y-1">
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-1.5">
-                          {getNotificationIcon(notification.type)}
-                          <p className="font-semibold text-sm">
-                            {notification.fromUserName}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs text-muted-foreground whitespace-nowrap">
-                            {formatNotificationTime(notification.createdAt)}
-                          </span>
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon" 
-                                  className="h-6 w-6"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    deleteNotification(notification.id);
-                                  }}
-                                >
-                                  <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent side="left">
-                                <p>Delete notification</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        </div>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        {getNotificationMessage(notification)}
-                      </p>
-                    </div>
-                  )}
-                </DropdownMenuItem>
+                <NotificationItem 
+                  key={notification.id}
+                  notification={notification}
+                  onDelete={deleteNotification}
+                  onClick={handleNotificationClick}
+                />
               ))
             ) : (
               <div className="py-8 text-center">

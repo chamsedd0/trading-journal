@@ -119,4 +119,38 @@
   body {
     @apply bg-background text-foreground;
   }
+  
+  /* Custom Scrollbar Styles */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: transparent;
+    border-radius: 6px;
+    margin: 2px;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: var(--muted-foreground);
+    opacity: 0.3;
+    border-radius: 6px;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--primary);
+    opacity: 0.5;
+  }
+  
+  /* Firefox scrollbar */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--muted-foreground) transparent;
+  }
+  
+  /* Hide scrollbars for ScrollArea components */
+  .scrollarea-scrollbar {
+    @apply w-1.5 opacity-0 transition-opacity duration-100 ease-in-out hover:opacity-100 data-[visible=true]:opacity-100;
+  }
 }
