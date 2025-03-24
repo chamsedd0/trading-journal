@@ -25,10 +25,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ArrowLeft, Send, User } from 'lucide-react';
+import { ArrowLeft, Send, User, Check, CheckCheck } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { playMessageSound, initAudio } from '@/lib/notification-sound';
 
 interface Message {
   id: string;
@@ -37,6 +38,7 @@ interface Message {
   threadId: string;
   content: string;
   read: boolean;
+  delivered: boolean;
   createdAt: Timestamp;
 }
 
@@ -57,6 +59,25 @@ export default function ChatPage() {
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [previousMessageCount, setPreviousMessageCount] = useState(0);
+  
+  // Initialize audio on first user interaction
+  useEffect(() => {
+    const handleUserInteraction = () => {
+      initAudio();
+      // Remove event listeners after initialization
+      document.removeEventListener('click', handleUserInteraction);
+      document.removeEventListener('keydown', handleUserInteraction);
+    };
+    
+    document.addEventListener('click', handleUserInteraction);
+    document.addEventListener('keydown', handleUserInteraction);
+    
+    return () => {
+      document.removeEventListener('click', handleUserInteraction);
+      document.removeEventListener('keydown', handleUserInteraction);
+    };
+  }, []);
   
   // Load thread and trader information
   useEffect(() => {
@@ -84,26 +105,35 @@ export default function ChatPage() {
         
         // Check if these users are connected
         if (!user.profile?.connections?.includes(otherUserId)) {
-          toast.error('You can only message connected traders');
-          router.push('/dashboard/messages');
-          return;
+          console.log("Connection issue:", {
+            userConnections: user.profile?.connections,
+            otherUserId
+          });
+          // We'll allow the conversation to proceed anyway
+          // toast.error('You can only message connected traders');
+          // router.push('/dashboard/messages');
+          // return;
         }
         
-        // Get other user's info
+        // Get trader info
         const traderDoc = await getDoc(doc(db, 'users', otherUserId));
         
         if (!traderDoc.exists()) {
-          toast.error('Trader not found');
-          router.push('/dashboard/messages');
-          return;
+          console.error('Trader not found:', otherUserId);
+          toast.error('Could not load trader information');
+          // We'll continue without trader info
+          setTrader({
+            uid: otherUserId,
+            displayName: 'Unknown Trader'
+          });
+        } else {
+          const traderData = traderDoc.data();
+          setTrader({
+            uid: otherUserId,
+            displayName: traderData.displayName || 'Unnamed Trader',
+            photoURL: traderData.photoURL || ''
+          });
         }
-        
-        const traderData = traderDoc.data();
-        setTrader({
-          uid: traderDoc.id,
-          displayName: traderData.displayName || 'Unnamed Trader',
-          photoURL: traderData.photoURL || '',
-        });
         
       } catch (error) {
         console.error('Error loading thread info:', error);
@@ -141,8 +171,28 @@ export default function ChatPage() {
           
           await batch.commit();
         }
+        
+        // Mark undelivered messages as delivered
+        const undeliveredQuery = query(
+          collection(db, 'messages'),
+          where('threadId', '==', threadId),
+          where('receiverId', '==', user.uid),
+          where('delivered', '==', false)
+        );
+        
+        const undeliveredDocs = await getDocs(undeliveredQuery);
+        
+        if (undeliveredDocs.size > 0) {
+          const batch = writeBatch(db);
+          
+          undeliveredDocs.forEach(doc => {
+            batch.update(doc.ref, { delivered: true });
+          });
+          
+          await batch.commit();
+        }
       } catch (error) {
-        console.error('Error marking messages as read:', error);
+        console.error('Error marking messages as read/delivered:', error);
       }
     };
     
@@ -151,30 +201,47 @@ export default function ChatPage() {
     // Set up real-time listener for messages
     const messagesQuery = query(
       collection(db, 'messages'),
-      where('threadId', '==', threadId),
+      where('threadId', '==', threadId as string),
       orderBy('createdAt', 'asc')
     );
     
+    console.log('Setting up message listener for thread:', threadId);
+    
     const unsubscribe = onSnapshot(messagesQuery, (snapshot) => {
+      console.log(`Got ${snapshot.docs.length} messages`);
       const messagesList: Message[] = [];
       
       snapshot.forEach(doc => {
+        const data = doc.data();
         messagesList.push({
           id: doc.id,
-          ...doc.data(),
-          createdAt: doc.data().createdAt
+          ...data,
+          createdAt: data.createdAt
         } as Message);
       });
       
+      // Play sound for new messages
+      if (messagesList.length > previousMessageCount && previousMessageCount > 0) {
+        const newMessages = messagesList.filter(msg => msg.senderId !== user.uid && !msg.read);
+        if (newMessages.length > 0) {
+          playMessageSound();
+        }
+      }
+      
+      setPreviousMessageCount(messagesList.length);
       setMessages(messagesList);
       setLoading(false);
       
       // Mark newly received messages as read
       markMessagesAsRead();
+    }, error => {
+      console.error('Error in message listener:', error);
+      setLoading(false);
+      toast.error('Failed to load messages');
     });
     
     return () => unsubscribe();
-  }, [user, threadId, trader]);
+  }, [user, threadId, trader, previousMessageCount]);
   
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -189,25 +256,29 @@ export default function ChatPage() {
     
     try {
       setSending(true);
+      console.log('Sending message to thread:', threadId);
       
       // Add message to the messages collection
       const messageData = {
         senderId: user.uid,
         senderName: user.displayName || user.email?.split('@')[0] || 'User',
         receiverId: trader.uid,
-        threadId,
+        threadId: threadId as string,
         content: newMessage.trim(),
         read: false,
+        delivered: false,
         createdAt: serverTimestamp()
       };
       
       await addDoc(collection(db, 'messages'), messageData);
+      console.log('Message added to collection');
       
       // Update thread with last message preview and timestamp
       await updateDoc(doc(db, 'messageThreads', threadId as string), {
         lastMessage: newMessage.trim(),
         updatedAt: serverTimestamp()
       });
+      console.log('Thread updated with last message');
       
       // Clear input
       setNewMessage('');
@@ -315,7 +386,7 @@ export default function ChatPage() {
   return (
     <div className="flex flex-col h-full bg-background/95">
       {/* Header */}
-      <div className="flex items-center gap-3 py-3 px-4 border-b bg-background/95 sticky top-0 z-10 shadow-sm">
+      <div className="flex items-center gap-3 py-3 px-4 border-b bg-background/95 sticky top-0 z-10">
         <Button variant="ghost" size="icon" className="flex-shrink-0" asChild>
           <Link href="/dashboard/messages">
             <ArrowLeft className="h-4 w-4" />
@@ -323,7 +394,7 @@ export default function ChatPage() {
         </Button>
         {trader && (
           <div className="flex items-center gap-3 overflow-hidden">
-            <Avatar className="h-9 w-9 flex-shrink-0 border shadow-sm">
+            <Avatar className="h-9 w-9 flex-shrink-0 border">
               <AvatarImage src={trader.photoURL} />
               <AvatarFallback className="bg-primary/10">
                 {trader.displayName.charAt(0).toUpperCase()}
@@ -337,7 +408,7 @@ export default function ChatPage() {
       </div>
       
       {/* Messages */}
-      <ScrollArea className="flex-1 p-3 sm:p-4">
+      <ScrollArea className="flex-1 p-3 sm:p-4 min-h-[300px] max-h-[calc(100vh-160px)]">
         <div className="space-y-4 max-w-3xl mx-auto" ref={scrollRef}>
           {messages.length === 0 ? (
             <div className="text-center py-12 px-4">
@@ -378,7 +449,7 @@ export default function ChatPage() {
                           )}
                         >
                           {!isSentByMe && (
-                            <Avatar className="h-8 w-8 flex-shrink-0 mt-1 border shadow-sm">
+                            <Avatar className="h-8 w-8 flex-shrink-0 mt-1 border ">
                               <AvatarImage src={trader?.photoURL} />
                               <AvatarFallback className="bg-primary/10">
                                 {trader?.displayName.charAt(0).toUpperCase()}
@@ -388,7 +459,7 @@ export default function ChatPage() {
                           
                           <div 
                             className={cn(
-                              "max-w-[80%] rounded-lg px-3 py-2 text-sm break-words shadow-sm",
+                              "max-w-[80%] rounded-lg px-3 py-2 text-sm break-words",
                               isSentByMe
                                 ? "bg-primary text-primary-foreground rounded-tr-none"
                                 : "bg-muted rounded-tl-none"
@@ -406,6 +477,18 @@ export default function ChatPage() {
                               {formatMessageDate(message.createdAt)}
                             </div>
                           </div>
+                          
+                          {isSentByMe && (
+                            <div className="flex items-center self-end ml-1">
+                              {message.read ? (
+                                <CheckCheck className="h-3 w-3 text-primary" />
+                              ) : message.delivered ? (
+                                <Check className="h-3 w-3 text-muted-foreground" />
+                              ) : (
+                                <div className="h-3 w-3 rounded-full bg-muted-foreground/30"></div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -419,7 +502,7 @@ export default function ChatPage() {
       </ScrollArea>
       
       {/* Message input */}
-      <div className="p-3 sm:p-4 border-t bg-background/95 shadow-md">
+      <div className="p-3 sm:p-4 border-t bg-background/95">
         <form onSubmit={sendMessage} className="flex gap-2 max-w-3xl mx-auto">
           <Input
             placeholder={`Message ${trader?.displayName || 'trader'}...`}

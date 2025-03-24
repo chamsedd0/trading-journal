@@ -35,8 +35,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { playNotificationSound, initAudio } from '@/lib/notification-sound';
 
 interface ChatPreview {
+  threadId: string;
   traderId: string;
   displayName: string;
   photoURL: string;
@@ -60,11 +62,30 @@ export default function MessagesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [dialogSearchQuery, setDialogSearchQuery] = useState('');
   const [showNewChatDialog, setShowNewChatDialog] = useState(false);
+  const [totalUnread, setTotalUnread] = useState(0);
   
   // Reset dialog search when opening/closing dialog
   useEffect(() => {
     setDialogSearchQuery('');
   }, [showNewChatDialog]);
+  
+  // Initialize audio on first user interaction
+  useEffect(() => {
+    const handleUserInteraction = () => {
+      initAudio();
+      // Remove event listeners after initialization
+      document.removeEventListener('click', handleUserInteraction);
+      document.removeEventListener('keydown', handleUserInteraction);
+    };
+    
+    document.addEventListener('click', handleUserInteraction);
+    document.addEventListener('keydown', handleUserInteraction);
+    
+    return () => {
+      document.removeEventListener('click', handleUserInteraction);
+      document.removeEventListener('keydown', handleUserInteraction);
+    };
+  }, []);
   
   // Fetch all connections
   useEffect(() => {
@@ -120,6 +141,7 @@ export default function MessagesPage() {
         // Listen for real-time updates to the chat threads
         const unsubscribe = onSnapshot(threadQuery, async (snapshot) => {
           const previews: ChatPreview[] = [];
+          let currentTotalUnread = 0;
           
           for (const threadDoc of snapshot.docs) {
             const threadData = threadDoc.data();
@@ -144,17 +166,26 @@ export default function MessagesPage() {
               where('read', '==', false)
             );
             const unreadSnapshot = await getDocs(unreadQuery);
+            const unreadCount = unreadSnapshot.size;
+            currentTotalUnread += unreadCount;
             
             previews.push({
+              threadId: threadDoc.id,
               traderId: otherUserId,
               displayName: otherUser.displayName || 'Unnamed Trader',
               photoURL: otherUser.photoURL || '',
               lastMessage: threadData.lastMessage || 'No messages yet',
               timestamp: threadData.updatedAt,
-              unreadCount: unreadSnapshot.size
+              unreadCount: unreadCount
             });
           }
           
+          // Play sound if there are new unread messages
+          if (currentTotalUnread > totalUnread && totalUnread > 0) {
+            playNotificationSound();
+          }
+          
+          setTotalUnread(currentTotalUnread);
           setChatPreviews(previews);
           setLoading(false);
         });
@@ -168,7 +199,7 @@ export default function MessagesPage() {
     };
     
     fetchChatPreviews();
-  }, [user]);
+  }, [user, totalUnread]);
   
   // Filter chats by search query
   const filteredChatPreviews = chatPreviews.filter(chat => 
@@ -251,8 +282,8 @@ export default function MessagesPage() {
     return (
       <div className="flex flex-col space-y-4 p-3 sm:p-4 max-w-screen-lg mx-auto">
         <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
-          Messages
           <MessageSquare className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
+          Messages
         </h1>
         
         <div className="flex gap-2 w-full items-center">
@@ -270,21 +301,32 @@ export default function MessagesPage() {
           </div>
         </div>
         
-        <div className="grid gap-3 mt-4">
-          {[1, 2, 3].map((i) => (
-            <Card key={i} className="animate-pulse">
-              <CardContent className="p-3 sm:p-4">
+        <div className="space-y-4">
+          <div className="flex items-center">
+            <div className="h-4 w-40 bg-muted rounded animate-pulse"></div>
+          </div>
+          
+          <div className="grid gap-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="animate-pulse p-3 sm:p-4 rounded-xl border border-muted/40">
                 <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-muted"></div>
-                  <div className="flex-1 space-y-2">
-                    <div className="h-4 w-24 bg-muted rounded"></div>
-                    <div className="h-3 w-32 bg-muted rounded"></div>
+                  <div className="relative flex-shrink-0">
+                    <div className="h-11 w-11 rounded-full bg-muted"></div>
+                    {i === 1 && (
+                      <div className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-muted"></div>
+                    )}
                   </div>
-                  <div className="h-5 w-5 rounded-full bg-muted"></div>
+                  <div className="flex-1 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <div className="h-4 w-24 bg-muted rounded"></div>
+                      <div className="h-3 w-10 bg-muted rounded"></div>
+                    </div>
+                    <div className="h-3 w-full max-w-[200px] bg-muted rounded"></div>
+                  </div>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -329,25 +371,23 @@ export default function MessagesPage() {
               {filteredConnections.length > 0 ? (
                 <div className="grid gap-2">
                   {filteredConnections.map((connection) => (
-                    <Card 
+                    <div 
                       key={connection.uid} 
-                      className="shadow-sm hover:shadow-md transition-all cursor-pointer touch-manipulation"
+                      className="p-3 rounded-xl border border-muted/40 hover:bg-muted/20 transition-colors cursor-pointer touch-manipulation"
                       onClick={() => startNewChat(connection.uid)}
                     >
-                      <CardContent className="p-3 sm:p-3">
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-9 w-9 border shadow-sm">
-                            <AvatarImage src={connection.photoURL} />
-                            <AvatarFallback className="bg-primary/10">
-                              {connection.displayName.charAt(0).toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1">
-                            <h3 className="font-medium text-sm">{connection.displayName}</h3>
-                          </div>
+                      <div className="flex items-center gap-3">
+                        <Avatar className="h-9 w-9 border border-muted">
+                          <AvatarImage src={connection.photoURL} />
+                          <AvatarFallback className="bg-primary/10 text-primary-foreground">
+                            {connection.displayName.charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1">
+                          <h3 className="font-medium text-sm">{connection.displayName}</h3>
                         </div>
-                      </CardContent>
-                    </Card>
+                      </div>
+                    </div>
                   ))}
                 </div>
               ) : (
@@ -372,66 +412,98 @@ export default function MessagesPage() {
       </div>
       
       {chatPreviews.length === 0 && connections.length === 0 ? (
-        <div className="text-center py-8 px-4">
-          <MessageSquare className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+        <div className="text-center py-12 px-6 rounded-lg border border-dashed bg-muted/10 mt-4">
+          <div className="flex justify-center items-center w-16 h-16 mx-auto mb-4 rounded-full bg-muted/30">
+            <MessageSquare className="h-8 w-8 text-muted-foreground" />
+          </div>
           <h3 className="text-lg font-medium">No messages yet</h3>
-          <p className="text-muted-foreground mt-1 text-sm sm:text-base max-w-xs mx-auto">
-            You don't have any connections. Connect with traders to start chatting.
+          <p className="text-muted-foreground mt-2 text-sm sm:text-base max-w-xs mx-auto">
+            You don't have any connections. Connect with traders to start messaging.
           </p>
-          <Button 
-            className="mt-6 shadow-sm" 
-            variant="outline" 
-            onClick={() => router.push('/dashboard/traders/find')}
-          >
-            Find Traders
-          </Button>
+          <div className="flex justify-center gap-3 mt-6">
+            <Button 
+              className="shadow-sm" 
+              variant="outline" 
+              onClick={() => router.push('/dashboard/traders/find')}
+            >
+              Find Traders
+            </Button>
+            <Button
+              className="shadow-sm"
+              onClick={() => router.push('/dashboard/traders/connections')}
+            >
+              View Connections
+            </Button>
+          </div>
         </div>
       ) : (
-        <div className="grid gap-2 sm:gap-3">
-          {filteredChatPreviews.length > 0 && (
-            <>
-              <h2 className="text-sm font-medium text-muted-foreground px-1 pt-2">
+        <>
+          {filteredChatPreviews.length === 0 ? (
+            <div className="text-center py-12 px-6 rounded-lg border border-dashed bg-muted/10 mt-4">
+              <div className="flex justify-center items-center w-14 h-14 mx-auto mb-4 rounded-full bg-muted/30">
+                <Search className="h-6 w-6 text-muted-foreground" />
+              </div>
+              <h3 className="text-base font-medium">No conversations found</h3>
+              <p className="text-muted-foreground mt-2 text-sm max-w-xs mx-auto">
+                No conversations match your search. Try different keywords or start a new conversation.
+              </p>
+              <Button 
+                className="mt-4 shadow-sm" 
+                variant="outline"
+                onClick={() => setSearchQuery('')}
+              >
+                Clear Search
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <h2 className="text-sm font-semibold text-muted-foreground px-1">
                 Recent Conversations
               </h2>
-              {filteredChatPreviews.map((chat) => (
-                <Link 
-                  key={chat.traderId} 
-                  href={`/dashboard/messages/${chat.traderId}`}
-                  className="block touch-manipulation"
-                >
-                  <Card className="shadow-sm hover:shadow-md transition-all border-muted/40">
-                    <CardContent className="p-3 sm:p-4">
+              <div className="space-y-2 sm:space-y-3">
+                {filteredChatPreviews.map((chat) => (
+                  <Link 
+                    key={chat.traderId} 
+                    href={`/dashboard/messages/${chat.threadId}`}
+                    className="block touch-manipulation"
+                  >
+                    <div className={`p-3 sm:p-4 rounded-xl border ${chat.unreadCount > 0 ? 'bg-primary/5 border-primary/20' : 'hover:bg-muted/20 border-muted/40'} transition-colors`}>
                       <div className="flex items-center gap-3">
-                        <Avatar className="h-10 w-10 border shadow-sm">
-                          <AvatarImage src={chat.photoURL} />
-                          <AvatarFallback className="bg-primary/10">
-                            {chat.displayName.charAt(0).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
+                        <div className="relative flex-shrink-0">
+                          <Avatar className="h-11 w-11 border border-muted">
+                            <AvatarImage src={chat.photoURL} />
+                            <AvatarFallback className="bg-primary/10 text-primary-foreground">
+                              {chat.displayName.charAt(0).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          {chat.unreadCount > 0 && (
+                            <span className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-medium text-primary-foreground ring-2 ring-background">
+                              {chat.unreadCount}
+                            </span>
+                          )}
+                        </div>
+                        
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between gap-2">
-                            <h3 className="font-semibold text-sm truncate">{chat.displayName}</h3>
-                            <span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
+                          <div className="flex items-center justify-between mb-1">
+                            <h3 className={`text-sm ${chat.unreadCount > 0 ? 'font-bold' : 'font-medium'}`}>
+                              {chat.displayName}
+                            </h3>
+                            <span className="text-xs text-muted-foreground whitespace-nowrap ml-2 tabular-nums">
                               {formatTimestamp(chat.timestamp)}
                             </span>
                           </div>
-                          <p className="text-sm text-muted-foreground truncate max-w-full">
+                          <p className={`text-xs sm:text-sm truncate max-w-full ${chat.unreadCount > 0 ? 'text-foreground' : 'text-muted-foreground'}`}>
                             {chat.lastMessage}
                           </p>
                         </div>
-                        {chat.unreadCount > 0 && (
-                          <Badge className="rounded-full bg-primary text-primary-foreground ml-2 flex-shrink-0">
-                            {chat.unreadCount}
-                          </Badge>
-                        )}
                       </div>
-                    </CardContent>
-                  </Card>
-                </Link>
-              ))}
-            </>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
           )}
-        </div>
+        </>
       )}
     </div>
   );
