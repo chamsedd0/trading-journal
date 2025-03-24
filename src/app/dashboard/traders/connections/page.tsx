@@ -7,7 +7,11 @@ import {
   doc, 
   getDoc, 
   updateDoc, 
-  arrayRemove
+  arrayRemove,
+  query,
+  where,
+  getDocs,
+  addDoc
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
@@ -32,6 +36,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { useRouter } from 'next/navigation';
+import { Timestamp } from 'firebase/firestore';
 
 interface TraderProfile {
   uid: string;
@@ -50,6 +56,7 @@ export default function ConnectionsPage() {
   const [loading, setLoading] = useState(true);
   const [processingConnection, setProcessingConnection] = useState<Record<string, boolean>>({});
   const [searchQuery, setSearchQuery] = useState('');
+  const router = useRouter();
   
   // Fetch all connections
   useEffect(() => {
@@ -147,15 +154,49 @@ export default function ConnectionsPage() {
   });
 
   // Chat functionality placeholder
-  const openChat = (traderId: string) => {
-    // In a real implementation, this would navigate to a chat page or open a chat dialog
-    toast.info("Chat functionality coming soon!");
+  const openChat = async (traderId: string) => {
+    try {
+      // Check if thread already exists
+      const threadQuery = query(
+        collection(db, 'messageThreads'),
+        where('participants', 'array-contains', user.uid)
+      );
+      
+      const snapshot = await getDocs(threadQuery);
+      let existingThreadId: string | null = null;
+      
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        if (data.participants.includes(traderId)) {
+          existingThreadId = doc.id;
+        }
+      });
+      
+      if (existingThreadId) {
+        router.push(`/dashboard/messages/${existingThreadId}`);
+        return;
+      }
+      
+      // Create a new message thread
+      const threadRef = await addDoc(collection(db, 'messageThreads'), {
+        participants: [user.uid, traderId],
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+        lastMessage: 'No messages yet',
+      });
+      
+      // Navigate to the new chat
+      router.push(`/dashboard/messages/${threadRef.id}`);
+      
+    } catch (error) {
+      console.error('Error starting chat:', error);
+      toast.error('Failed to start conversation');
+    }
   };
   
   // View profile placeholder
   const viewProfile = (traderId: string) => {
-    // In a real implementation, this would navigate to the trader's profile
-    toast.info("Full profile view coming soon!");
+    router.push(`/dashboard/traders/${traderId}`);
   };
   
   return (

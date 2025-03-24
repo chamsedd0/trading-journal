@@ -11,7 +11,8 @@ import {
   doc, 
   arrayUnion,
   arrayRemove,
-  Timestamp
+  Timestamp,
+  addDoc
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
@@ -43,6 +44,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { useRouter } from 'next/navigation';
 
 interface TraderProfile {
   uid: string;
@@ -69,6 +71,7 @@ export default function FindTradersPage() {
   });
   const [processingConnection, setProcessingConnection] = useState<{[key: string]: boolean}>({});
   const [showFilters, setShowFilters] = useState(false);
+  const router = useRouter();
   
   // Fetch all public traders from Firebase
   useEffect(() => {
@@ -199,20 +202,19 @@ export default function FindTradersPage() {
       
       // 2. Add the current user to the trader's pending connections
       await updateDoc(doc(db, 'users', traderId), {
-        pendingConnections: arrayUnion(user.uid)
+        pendingConnections: arrayUnion(user.uid),
+        hasUnreadNotifications: true
       });
       
       // 3. Create a notification for the recipient
-      const notificationData = {
+      const notificationRef = collection(db, 'users', traderId, 'notifications');
+      await addDoc(notificationRef, {
         type: 'connection_request',
-        fromUid: user.uid,
-        timestamp: Timestamp.now(),
-        read: false
-      };
-      
-      const notificationsRef = collection(db, 'users', traderId, 'notifications');
-      await updateDoc(doc(db, 'users', traderId), {
-        hasUnreadNotifications: true
+        fromUserId: user.uid,
+        fromUserName: user.profile?.fullName || user.displayName || 'A trader',
+        fromUserPhoto: user.photoURL || '',
+        read: false,
+        createdAt: Timestamp.now()
       });
       
       // 4. Show success notification
@@ -303,6 +305,53 @@ export default function FindTradersPage() {
     } catch (error) {
       console.error("Error removing connection:", error);
       toast.error("Failed to remove connection");
+    } finally {
+      setProcessingConnection(prev => ({ ...prev, [traderId]: false }));
+    }
+  };
+  
+  // Start a chat with a connected trader
+  const startChat = async (traderId: string) => {
+    if (!user) return;
+    
+    try {
+      setProcessingConnection(prev => ({ ...prev, [traderId]: true }));
+      
+      // Check if thread already exists
+      const threadQuery = query(
+        collection(db, 'messageThreads'),
+        where('participants', 'array-contains', user.uid)
+      );
+      
+      const snapshot = await getDocs(threadQuery);
+      let existingThreadId: string | null = null;
+      
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        if (data.participants.includes(traderId)) {
+          existingThreadId = doc.id;
+        }
+      });
+      
+      if (existingThreadId) {
+        router.push(`/dashboard/messages/${existingThreadId}`);
+        return;
+      }
+      
+      // Create a new message thread
+      const threadRef = await addDoc(collection(db, 'messageThreads'), {
+        participants: [user.uid, traderId],
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+        lastMessage: 'No messages yet',
+      });
+      
+      // Navigate to the new chat
+      router.push(`/dashboard/messages/${threadRef.id}`);
+      
+    } catch (error) {
+      console.error("Error starting chat:", error);
+      toast.error("Failed to start conversation");
     } finally {
       setProcessingConnection(prev => ({ ...prev, [traderId]: false }));
     }
@@ -576,7 +625,16 @@ export default function FindTradersPage() {
                                 <div>
                                   <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
-                                      <Button variant="outline" size="icon" className="h-9 w-9 rounded-md">
+                                      <Button 
+                                        variant="outline" 
+                                        size="icon" 
+                                        className="h-9 w-9 rounded-md"
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          startChat(trader.uid);
+                                        }}
+                                      >
                                         <MessageSquare className="h-4 w-4 text-primary" />
                                       </Button>
                                     </DropdownMenuTrigger>

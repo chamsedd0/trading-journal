@@ -13,7 +13,8 @@ import {
   where,
   getDocs,
   deleteDoc,
-  Timestamp
+  Timestamp,
+  addDoc
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
@@ -127,19 +128,19 @@ export default function ConnectionRequestsPage() {
       // 2. Remove from other user's outgoing requests and add to connections
       await updateDoc(doc(db, 'users', traderUid), {
         outgoingRequests: arrayRemove(user.uid),
-        connections: arrayUnion(user.uid)
+        connections: arrayUnion(user.uid),
+        hasUnreadNotifications: true
       });
       
       // 3. Create a notification for the other user
-      const notificationData = {
+      const notificationRef = collection(db, 'users', traderUid, 'notifications');
+      await addDoc(notificationRef, {
         type: 'connection_accepted',
-        fromUid: user.uid,
-        timestamp: Timestamp.now(),
-        read: false
-      };
-      
-      await updateDoc(doc(db, 'users', traderUid), {
-        hasUnreadNotifications: true
+        fromUserId: user.uid,
+        fromUserName: user.profile?.fullName || user.displayName || 'A trader',
+        fromUserPhoto: user.photoURL || '',
+        read: false,
+        createdAt: Timestamp.now()
       });
       
       // 4. Update local state
@@ -169,7 +170,7 @@ export default function ConnectionRequestsPage() {
     try {
       setProcessingRequest(prev => ({ ...prev, [traderUid]: true }));
       
-      // Get current connection state
+      // Get current pending connections
       const currentPendingConnections = user.profile?.pendingConnections || [];
       
       // 1. Remove from pending connections
@@ -195,7 +196,7 @@ export default function ConnectionRequestsPage() {
       
     } catch (error) {
       console.error("Error rejecting connection request:", error);
-      toast.error("Failed to reject connection");
+      toast.error("Failed to reject request");
     } finally {
       setProcessingRequest(prev => ({ ...prev, [traderUid]: false }));
     }

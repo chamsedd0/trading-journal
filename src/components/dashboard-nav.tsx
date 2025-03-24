@@ -16,7 +16,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Home,
-  Users
+  Users,
+  MessageSquare
 } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
@@ -67,6 +68,11 @@ export function DashboardNav({ collapsed, setCollapsed }: {
       title: "Traders",
       href: "/dashboard/traders",
       icon: <Users className="h-4 w-4" />
+    },
+    {
+      title: "Messages",
+      href: "/dashboard/messages",
+      icon: <MessageSquare className="h-4 w-4" />
     },
     {
       title: "Settings",

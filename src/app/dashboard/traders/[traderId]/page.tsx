@@ -258,7 +258,8 @@ export default function TraderProfilePage() {
       
       // Add to pending connections for other user
       await updateDoc(doc(db, 'users', trader.uid), {
-        pendingConnections: arrayUnion(user.uid)
+        pendingConnections: arrayUnion(user.uid),
+        hasUnreadNotifications: true
       });
       
       // Create notification for the recipient
@@ -266,7 +267,7 @@ export default function TraderProfilePage() {
       await addDoc(notificationRef, {
         type: 'connection_request',
         fromUserId: user.uid,
-        fromUserName: user.profile?.fullName || 'A trader',
+        fromUserName: user.profile?.fullName || user.displayName || 'A trader',
         fromUserPhoto: user.photoURL || '',
         read: false,
         createdAt: Timestamp.now()
@@ -375,7 +376,51 @@ export default function TraderProfilePage() {
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button size="icon" variant="outline" className="shadow-md hover:shadow-lg transition-all rounded-md h-9 w-9">
+                        <Button 
+                          size="icon" 
+                          variant="outline" 
+                          className="shadow-md hover:shadow-lg transition-all rounded-md h-9 w-9"
+                          onClick={async () => {
+                            if (!user) return;
+                            
+                            try {
+                              // Check if thread already exists
+                              const threadQuery = query(
+                                collection(db, 'messageThreads'),
+                                where('participants', 'array-contains', user.uid)
+                              );
+                              
+                              const snapshot = await getDocs(threadQuery);
+                              let existingThreadId: string | null = null;
+                              
+                              snapshot.forEach(doc => {
+                                const data = doc.data();
+                                if (data.participants.includes(trader.uid)) {
+                                  existingThreadId = doc.id;
+                                }
+                              });
+                              
+                              if (existingThreadId) {
+                                router.push(`/dashboard/messages/${existingThreadId}`);
+                                return;
+                              }
+                              
+                              // Create a new message thread
+                              const threadRef = await addDoc(collection(db, 'messageThreads'), {
+                                participants: [user.uid, trader.uid],
+                                createdAt: Timestamp.now(),
+                                updatedAt: Timestamp.now(),
+                                lastMessage: 'No messages yet',
+                              });
+                              
+                              // Navigate to the new chat
+                              router.push(`/dashboard/messages/${threadRef.id}`);
+                            } catch (error) {
+                              console.error('Error starting chat:', error);
+                              toast.error('Failed to start conversation');
+                            }
+                          }}
+                        >
                           <MessageSquare className="h-4 w-4 text-primary" />
                         </Button>
                       </TooltipTrigger>

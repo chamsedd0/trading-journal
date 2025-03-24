@@ -12,7 +12,7 @@ import {
   UserCredential
 } from "firebase/auth";
 import { auth } from "./firebase";
-import { doc, getDoc, setDoc, updateDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, collection, addDoc, serverTimestamp, query, where, limit, getDocs } from "firebase/firestore";
 import { db } from "./firebase";
 import { useRouter } from "next/navigation";
 
@@ -58,6 +58,7 @@ export interface UserProfile {
   pendingConnections?: string[];
   outgoingRequests?: string[];
   isPublicProfile?: boolean;
+  hasUnreadNotifications?: boolean;
   socialPrivacy?: {
     showPnL?: boolean;
     showTradingStats?: boolean;
@@ -85,6 +86,8 @@ interface AuthContextType {
     pendingConnections?: string[],
     outgoingRequests?: string[]
   }) => void;
+  checkNotifications: () => Promise<void>;
+  setHasUnreadNotifications: (value: boolean) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -490,6 +493,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             pendingConnections: userData.pendingConnections || [],
             outgoingRequests: userData.outgoingRequests || [],
             isPublicProfile: userData.isPublicProfile,
+            hasUnreadNotifications: userData.hasUnreadNotifications || false,
             socialPrivacy: userData.socialPrivacy || {
               showPnL: true,
               showTradingStats: true
@@ -532,6 +536,68 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
+  // Check for unread notifications
+  const checkNotifications = async () => {
+    if (!user) return;
+    
+    try {
+      // Update the user document with hasUnreadNotifications flag
+      const notificationsRef = collection(db, "users", user.uid, "notifications");
+      const q = query(notificationsRef, where("read", "==", false), limit(1));
+      const querySnapshot = await getDocs(q);
+      
+      const hasUnread = !querySnapshot.empty;
+      
+      if (hasUnread !== user.profile?.hasUnreadNotifications) {
+        await updateDoc(doc(db, "users", user.uid), {
+          hasUnreadNotifications: hasUnread
+        });
+        
+        // Update local state
+        setUser(prev => {
+          if (!prev) return null;
+          
+          return {
+            ...prev,
+            profile: {
+              ...prev.profile,
+              hasUnreadNotifications: hasUnread
+            } as UserProfile
+          };
+        });
+      }
+    } catch (error) {
+      console.error("Error checking notifications", error);
+    }
+  };
+  
+  // Set hasUnreadNotifications flag
+  const setHasUnreadNotifications = async (value: boolean) => {
+    if (!user) return;
+    
+    try {
+      // Update the user document with hasUnreadNotifications flag
+      await updateDoc(doc(db, "users", user.uid), {
+        hasUnreadNotifications: value
+      });
+      
+      // Update local state
+      setUser(prev => {
+        if (!prev) return null;
+        
+        return {
+          ...prev,
+          profile: {
+            ...prev.profile,
+            hasUnreadNotifications: value
+          } as UserProfile
+        };
+      });
+    } catch (error) {
+      console.error("Error setting hasUnreadNotifications", error);
+    }
+  };
+
   return (
     <AuthContext.Provider 
       value={{ 
@@ -546,7 +612,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         updateAccount,
         completeSetup,
         refreshAuthState,
-        updateConnectionState
+        updateConnectionState,
+        checkNotifications,
+        setHasUnreadNotifications
       }}
     >
       {children}

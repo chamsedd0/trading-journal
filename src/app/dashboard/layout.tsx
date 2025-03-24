@@ -8,15 +8,16 @@ import { useEffect, useState } from "react";
 import { DashboardNav } from "@/components/dashboard-nav";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Menu, Bell } from "lucide-react";
+import { Menu } from "lucide-react";
 import { LayoutSkeleton } from "@/components/skeletons/layout-skeleton";
+import { NotificationDropdown } from "@/components/notifications/notification-dropdown";
 
 export default function DashboardLayout({
   children,
 }: {
   children: ReactNode;
 }) {
-  const { user, loading, logout } = useAuth();
+  const { user, loading, logout, checkNotifications } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
@@ -49,6 +50,13 @@ export default function DashboardLayout({
     // Close mobile sidebar when pathname changes
     setMobileOpen(false);
   }, [user, loading, router, pathname]);
+  
+  // Check for unread notifications when layout loads
+  useEffect(() => {
+    if (user) {
+      checkNotifications();
+    }
+  }, [user, checkNotifications]);
   
   const handleLogout = async () => {
     try {
@@ -110,13 +118,7 @@ export default function DashboardLayout({
           </div>
           
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" className="text-muted-foreground relative">
-              <Bell className="h-5 w-5" />
-              <span className="absolute -top-0.5 -right-0.5 flex h-3 w-3">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/75 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
-              </span>
-            </Button>
+            <NotificationDropdown />
             <Link href="/dashboard/profile">
               <div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center font-medium border border-primary/20 cursor-pointer hover:bg-primary/20 transition-colors">
                 {user?.displayName?.charAt(0) || user?.email?.charAt(0)?.toUpperCase() || 'U'}
