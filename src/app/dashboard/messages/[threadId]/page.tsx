@@ -220,10 +220,19 @@ export default function ChatPage() {
         } as Message);
       });
       
-      // Play sound for new messages
+      // Only play sound when:
+      // 1. We have more messages than before
+      // 2. We've loaded messages at least once before (previousMessageCount > 0)
+      // 3. There are new unread messages not sent by the current user
       if (messagesList.length > previousMessageCount && previousMessageCount > 0) {
-        const newMessages = messagesList.filter(msg => msg.senderId !== user.uid && !msg.read);
+        // Check specifically for new messages from the other user
+        const newMessages = snapshot.docChanges()
+          .filter(change => change.type === 'added')
+          .map(change => change.doc.data())
+          .filter(msg => msg.senderId !== user.uid);
+          
         if (newMessages.length > 0) {
+          console.log("New message detected in conversation, playing sound");
           playMessageSound();
         }
       }
@@ -258,49 +267,78 @@ export default function ChatPage() {
       setSending(true);
       console.log('Sending message to thread:', threadId);
       
+      // Create the message data
+      const messageContent = newMessage.trim();
+      const messagePreview = messageContent.substring(0, 50) + (messageContent.length > 50 ? '...' : '');
+      const senderName = user.profile?.fullName || user.displayName || user.email?.split('@')[0] || 'User';
+      
+      // Check if we should create a notification
+      let createNotification = true;
+      
+      // Check the most recent message in this thread
+      if (messages.length > 0) {
+        const latestMessage = messages[messages.length - 1];
+        
+        // If the latest message was from the current user and within the last hour,
+        // we don't need to create a notification (avoiding notification spam)
+        if (
+          latestMessage.senderId === user.uid && 
+          latestMessage.createdAt && 
+          (Date.now() - latestMessage.createdAt.toMillis() < 3600000) // 1 hour
+        ) {
+          createNotification = false;
+        }
+      }
+      
       // Add message to the messages collection
       const messageData = {
         senderId: user.uid,
-        senderName: user.displayName || user.email?.split('@')[0] || 'User',
+        senderName: senderName,
         receiverId: trader.uid,
         threadId: threadId as string,
-        content: newMessage.trim(),
+        content: messageContent,
         read: false,
         delivered: false,
         createdAt: serverTimestamp()
       };
       
-      await addDoc(collection(db, 'messages'), messageData);
-      console.log('Message added to collection');
-      
-      // Update thread with last message preview and timestamp
-      await updateDoc(doc(db, 'messageThreads', threadId as string), {
-        lastMessage: newMessage.trim(),
-        updatedAt: serverTimestamp()
-      });
-      console.log('Thread updated with last message');
-      
-      // Clear input
-      setNewMessage('');
-      
-      // Create notification for the recipient if it's a new message
-      if (messages.length === 0) {
-        const notificationRef = collection(db, 'users', trader.uid, 'notifications');
-        await addDoc(notificationRef, {
+      // Create notification if needed
+      if (createNotification) {
+        // First create the notification to ensure it has a timestamp
+        // that will be picked up by the notification listeners
+        const notificationData = {
           type: 'message',
           fromUserId: user.uid,
-          fromUserName: user.profile?.fullName || user.displayName || 'A trader',
+          fromUserName: senderName,
           fromUserPhoto: user.photoURL || '',
-          messageContent: newMessage.trim().substring(0, 50) + (newMessage.length > 50 ? '...' : ''),
+          messageContent: messagePreview,
           read: false,
-          createdAt: Timestamp.now()
-        });
+          createdAt: Timestamp.now() // Use explicit timestamp for immediate notification
+        };
+        
+        // Create notification for the recipient
+        await addDoc(collection(db, 'users', trader.uid, 'notifications'), notificationData);
+        console.log('Notification created for new message');
         
         // Mark user as having new notifications
         await updateDoc(doc(db, 'users', trader.uid), {
           hasUnreadNotifications: true
         });
       }
+      
+      // Now send the actual message
+      await addDoc(collection(db, 'messages'), messageData);
+      console.log('Message added to collection');
+      
+      // Update thread with last message preview and timestamp
+      await updateDoc(doc(db, 'messageThreads', threadId as string), {
+        lastMessage: messageContent,
+        updatedAt: serverTimestamp()
+      });
+      console.log('Thread updated with last message');
+      
+      // Clear input
+      setNewMessage('');
       
     } catch (error) {
       console.error('Error sending message:', error);
@@ -408,10 +446,12 @@ export default function ChatPage() {
       </div>
       
       {/* Messages */}
-      <ScrollArea className="flex-1 p-3 sm:p-4 min-h-[300px] max-h-[calc(100vh-160px)]">
-        <div className="space-y-4 max-w-3xl mx-auto" ref={scrollRef}>
+      <div className="flex-1 overflow-y-auto min-h-[300px] max-h-[calc(100vh-160px)] p-3 sm:p-4">
+        <div className="h-full max-w-3xl mx-auto flex flex-col-reverse">
+          <div ref={messagesEndRef} />
+          
           {messages.length === 0 ? (
-            <div className="text-center py-12 px-4">
+            <div className="text-center py-12 px-4 flex-shrink-0">
               <div className="p-4 bg-muted inline-flex rounded-full mb-4">
                 <User className="h-10 w-10 text-muted-foreground" />
               </div>
@@ -421,85 +461,93 @@ export default function ChatPage() {
               </p>
             </div>
           ) : (
-            <>
-              {/* Group messages by date */}
-              {Array.from(new Set(messages.map(m => getMessageDateGroup(m.createdAt)))).map((dateGroup, index) => {
-                const dateMessages = messages.filter(m => getMessageDateGroup(m.createdAt) === dateGroup);
-                
-                return (
-                  <div key={dateGroup || index} className="space-y-4">
-                    <div className="relative flex items-center justify-center my-6">
-                      <div className="absolute inset-0 flex items-center">
-                        <div className="w-full border-t border-muted-foreground/20"></div>
+            <div className="space-y-6 flex-shrink-0">
+              {/* Group messages by date - in reverse chronological order for flex-col-reverse */}
+              {Array.from(new Set(messages.map(m => getMessageDateGroup(m.createdAt))))
+                .reverse()
+                .map((dateGroup, index) => {
+                  const dateMessages = messages
+                    .filter(m => getMessageDateGroup(m.createdAt) === dateGroup)
+                    .sort((a, b) => {
+                      if (!a.createdAt || !b.createdAt) return 0;
+                      return a.createdAt.toMillis() - b.createdAt.toMillis();
+                    });
+                  
+                  return (
+                    <div key={dateGroup || index}>
+                      <div className="relative flex items-center justify-center my-6">
+                        <div className="absolute inset-0 flex items-center">
+                          <div className="w-full border-t border-muted-foreground/20"></div>
+                        </div>
+                        <div className="relative bg-background px-2 text-xs text-muted-foreground">
+                          {getDateDisplay(dateGroup)}
+                        </div>
                       </div>
-                      <div className="relative bg-background px-2 text-xs text-muted-foreground">
-                        {getDateDisplay(dateGroup)}
-                      </div>
-                    </div>
-                    
-                    {dateMessages.map((message) => {
-                      const isSentByMe = message.senderId === user?.uid;
                       
-                      return (
-                        <div 
-                          key={message.id} 
-                          className={cn(
-                            "flex gap-2",
-                            isSentByMe ? "justify-end" : "justify-start"
-                          )}
-                        >
-                          {!isSentByMe && (
-                            <Avatar className="h-8 w-8 flex-shrink-0 mt-1 border ">
-                              <AvatarImage src={trader?.photoURL} />
-                              <AvatarFallback className="bg-primary/10">
-                                {trader?.displayName.charAt(0).toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                          )}
+                      <div className="space-y-4">
+                        {dateMessages.map((message) => {
+                          const isSentByMe = message.senderId === user?.uid;
                           
-                          <div 
-                            className={cn(
-                              "max-w-[80%] rounded-lg px-3 py-2 text-sm break-words",
-                              isSentByMe
-                                ? "bg-primary text-primary-foreground rounded-tr-none"
-                                : "bg-muted rounded-tl-none"
-                            )}
-                          >
-                            <div className="whitespace-pre-wrap">{message.content}</div>
+                          return (
                             <div 
+                              key={message.id} 
                               className={cn(
-                                "text-[11px] mt-1 text-right",
-                                isSentByMe
-                                  ? "text-primary-foreground/80"
-                                  : "text-muted-foreground"
+                                "flex gap-2",
+                                isSentByMe ? "justify-end" : "justify-start"
                               )}
                             >
-                              {formatMessageDate(message.createdAt)}
-                            </div>
-                          </div>
-                          
-                          {isSentByMe && (
-                            <div className="flex items-center self-end ml-1">
-                              {message.read ? (
-                                <CheckCheck className="h-3 w-3 text-primary" />
-                              ) : message.delivered ? (
-                                <Check className="h-3 w-3 text-muted-foreground" />
-                              ) : (
-                                <div className="h-3 w-3 rounded-full bg-muted-foreground/30"></div>
+                              {!isSentByMe && (
+                                <Avatar className="h-8 w-8 flex-shrink-0 mt-1 border ">
+                                  <AvatarImage src={trader?.photoURL} />
+                                  <AvatarFallback className="bg-primary/10">
+                                    {trader?.displayName.charAt(0).toUpperCase()}
+                                  </AvatarFallback>
+                                </Avatar>
+                              )}
+                              
+                              <div 
+                                className={cn(
+                                  "max-w-[80%] rounded-lg px-3 py-2 text-sm break-words",
+                                  isSentByMe
+                                    ? "bg-primary text-primary-foreground rounded-tr-none"
+                                    : "bg-muted rounded-tl-none"
+                                )}
+                              >
+                                <div className="whitespace-pre-wrap">{message.content}</div>
+                                <div 
+                                  className={cn(
+                                    "text-[11px] mt-1 text-right",
+                                    isSentByMe
+                                      ? "text-primary-foreground/80"
+                                      : "text-muted-foreground"
+                                  )}
+                                >
+                                  {formatMessageDate(message.createdAt)}
+                                </div>
+                              </div>
+                              
+                              {isSentByMe && (
+                                <div className="flex items-center self-end ml-1">
+                                  {message.read ? (
+                                    <CheckCheck className="h-3 w-3 text-primary" />
+                                  ) : message.delivered ? (
+                                    <Check className="h-3 w-3 text-muted-foreground" />
+                                  ) : (
+                                    <div className="h-3 w-3 rounded-full bg-muted-foreground/30"></div>
+                                  )}
+                                </div>
                               )}
                             </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })}
-              <div ref={messagesEndRef} />
-            </>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
           )}
         </div>
-      </ScrollArea>
+      </div>
       
       {/* Message input */}
       <div className="p-3 sm:p-4 border-t bg-background/95">

@@ -140,9 +140,20 @@ export default function MessagesPage() {
         
         // Listen for real-time updates to the chat threads
         const unsubscribe = onSnapshot(threadQuery, async (snapshot) => {
+          console.log("Message threads update detected");
           const previews: ChatPreview[] = [];
           let currentTotalUnread = 0;
+          let newMessagesDetected = false;
           
+          // Check for modified threads - might indicate new messages
+          snapshot.docChanges().forEach((change) => {
+            if (change.type === 'modified') {
+              console.log("Thread modified:", change.doc.id);
+              newMessagesDetected = true;
+            }
+          });
+          
+          // Process all threads
           for (const threadDoc of snapshot.docs) {
             const threadData = threadDoc.data();
             const otherUserId = threadData.participants.find((id: string) => id !== user.uid);
@@ -180,9 +191,20 @@ export default function MessagesPage() {
             });
           }
           
-          // Play sound if there are new unread messages
-          if (currentTotalUnread > totalUnread && totalUnread > 0) {
+          // Play sound if:
+          // 1. There are more total unread messages than before, OR
+          // 2. A thread was modified (indicating a new message) AND there are unread messages
+          if ((currentTotalUnread > totalUnread && totalUnread > 0) || 
+              (newMessagesDetected && currentTotalUnread > 0)) {
+            console.log("New messages detected, playing notification sound");
             playNotificationSound();
+            
+            // Show toast for new messages
+            if (currentTotalUnread > 0) {
+              toast.info(`You have ${currentTotalUnread} unread message${currentTotalUnread > 1 ? 's' : ''}`, {
+                duration: 4000,
+              });
+            }
           }
           
           setTotalUnread(currentTotalUnread);
@@ -456,11 +478,16 @@ export default function MessagesPage() {
               </Button>
             </div>
           ) : (
-            <div className="space-y-4">
-              <h2 className="text-sm font-semibold text-muted-foreground px-1">
-                Recent Conversations
-              </h2>
-              <div className="space-y-2 sm:space-y-3">
+            <div className="space-y-4 overflow-hidden">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-muted-foreground px-1">
+                  Recent Conversations
+                </h2>
+                <span className="text-xs text-muted-foreground px-1">
+                  {filteredChatPreviews.length} {filteredChatPreviews.length === 1 ? 'conversation' : 'conversations'}
+                </span>
+              </div>
+              <div className="space-y-2 sm:space-y-3 max-h-[calc(100vh-220px)] overflow-y-auto pr-1">
                 {filteredChatPreviews.map((chat) => (
                   <Link 
                     key={chat.traderId} 
@@ -482,7 +509,6 @@ export default function MessagesPage() {
                             </span>
                           )}
                         </div>
-                        
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between mb-1">
                             <h3 className={`text-sm ${chat.unreadCount > 0 ? 'font-bold' : 'font-medium'}`}>

@@ -36,6 +36,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { toast } from 'sonner';
+import { playNotificationSound, initAudio } from '@/lib/notification-sound';
 
 interface Notification {
   id: string;
@@ -50,11 +51,30 @@ interface Notification {
 }
 
 export function NotificationDropdown() {
-  const { user } = useAuth();
+  const { user, setHasUnreadNotifications } = useAuth();
   const router = useRouter();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [hasUnread, setHasUnread] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [notificationCount, setNotificationCount] = useState(0);
+  
+  // Initialize audio on first user interaction
+  useEffect(() => {
+    const handleUserInteraction = () => {
+      initAudio();
+      // Remove event listeners after initialization
+      document.removeEventListener('click', handleUserInteraction);
+      document.removeEventListener('keydown', handleUserInteraction);
+    };
+    
+    document.addEventListener('click', handleUserInteraction);
+    document.addEventListener('keydown', handleUserInteraction);
+    
+    return () => {
+      document.removeEventListener('click', handleUserInteraction);
+      document.removeEventListener('keydown', handleUserInteraction);
+    };
+  }, []);
   
   // Listen for new notifications
   useEffect(() => {
@@ -64,16 +84,31 @@ export function NotificationDropdown() {
     const q = query(
       notificationsRef,
       orderBy('createdAt', 'desc'),
-      limit(10)
+      limit(20) // Increase limit to ensure we catch all notifications
     );
     
+    console.log("Setting up notification listener");
+    
+    let isFirstLoad = true;
+    
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const newNotifications: Notification[] = [];
+      // Check for newly added notifications
+      const addedNotifications = snapshot.docChanges()
+        .filter(change => change.type === 'added')
+        .map(change => ({
+          id: change.doc.id,
+          ...change.doc.data()
+        } as Notification));
+        
+      console.log(`Notification update: ${snapshot.docs.length} total, ${addedNotifications.length} new`);
+      
+      // Get all notifications for state
+      const allNotifications: Notification[] = [];
       let foundUnread = false;
       
       snapshot.forEach((doc) => {
         const data = doc.data() as Omit<Notification, 'id'>;
-        newNotifications.push({
+        allNotifications.push({
           id: doc.id,
           ...data,
           createdAt: data.createdAt
@@ -84,7 +119,27 @@ export function NotificationDropdown() {
         }
       });
       
-      setNotifications(newNotifications);
+      // Only play sound if this is not the first load (when component mounts)
+      // and we have newly added notifications
+      if (!isFirstLoad && addedNotifications.length > 0) {
+        console.log("New notification detected", addedNotifications[0]);
+        
+        // Get the newest notification
+        const latestNotification = addedNotifications[0];
+        
+        // Play sound for the notification
+        playNotificationSound();
+        
+        // Show toast for new notification
+        toast.info(getNotificationMessage(latestNotification), {
+          description: formatNotificationTime(latestNotification.createdAt),
+          duration: 4000,
+        });
+      }
+      
+      isFirstLoad = false;
+      setNotificationCount(allNotifications.length);
+      setNotifications(allNotifications);
       setHasUnread(foundUnread);
     });
     
@@ -118,6 +173,9 @@ export function NotificationDropdown() {
       batch.update(userRef, { hasUnreadNotifications: false });
       
       await batch.commit();
+      
+      // Also update the user context
+      setHasUnreadNotifications(false);
       
       // Update local state
       setHasUnread(false);
@@ -174,18 +232,59 @@ export function NotificationDropdown() {
   };
   
   // Handle notification click based on type
-  const handleNotificationClick = (notification: Notification) => {
-    switch (notification.type) {
-      case 'connection_request':
-        router.push('/dashboard/traders/requests');
-        break;
-      case 'connection_accepted':
-        router.push(`/dashboard/traders/${notification.fromUserId}`);
-        break;
-      case 'message':
-        // This will be implemented when chat system is ready
-        toast.info('Chat system coming soon!');
-        break;
+  const handleNotificationClick = async (notification: Notification) => {
+    try {
+      switch (notification.type) {
+        case 'connection_request':
+          router.push('/dashboard/traders/requests');
+          break;
+        
+        case 'connection_accepted':
+          router.push(`/dashboard/traders/${notification.fromUserId}`);
+          break;
+        
+        case 'message': {
+          console.log("Handling message notification click", notification);
+          
+          // Find the thread with this user
+          const threadQuery = query(
+            collection(db, 'messageThreads'),
+            where('participants', 'array-contains', user?.uid || '')
+          );
+          
+          const threadSnapshot = await getDocs(threadQuery);
+          let threadId: string | null = null;
+          
+          // Find the thread with the notification sender
+          threadSnapshot.forEach((doc) => {
+            const data = doc.data();
+            if (data.participants.includes(notification.fromUserId)) {
+              threadId = doc.id;
+              console.log("Found thread ID:", threadId);
+            }
+          });
+          
+          if (threadId) {
+            // Mark this specific notification as read before navigating
+            await updateDoc(doc(db, 'users', user?.uid || '', 'notifications', notification.id), {
+              read: true
+            });
+            
+            router.push(`/dashboard/messages/${threadId}`);
+          } else {
+            console.error("Thread not found for message notification", notification);
+            toast.error('Conversation not found');
+            router.push('/dashboard/messages');
+          }
+          break;
+        }
+        
+        default:
+          router.push('/dashboard/messages');
+      }
+    } catch (error) {
+      console.error("Error handling notification click:", error);
+      toast.error("Could not process notification");
     }
     
     setIsOpen(false);
@@ -248,7 +347,7 @@ export function NotificationDropdown() {
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon" className="text-muted-foreground relative">
           <Bell className="h-5 w-5" />
-          {hasUnread && (
+          {(hasUnread || user?.profile?.hasUnreadNotifications) && (
             <span className="absolute -top-0.5 -right-0.5 flex h-3 w-3">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/75 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
@@ -283,50 +382,72 @@ export function NotificationDropdown() {
                   )}
                   onClick={() => handleNotificationClick(notification)}
                 >
-                  <Avatar className="h-9 w-9 flex-shrink-0">
-                    <AvatarImage src={notification.fromUserPhoto} />
-                    <AvatarFallback>
-                      {notification.fromUserName?.charAt(0)?.toUpperCase() || 'U'}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 space-y-1">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-1.5">
-                        {getNotificationIcon(notification.type)}
-                        <p className="font-semibold text-sm">
-                          {notification.fromUserName}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs text-muted-foreground whitespace-nowrap">
-                          {formatNotificationTime(notification.createdAt)}
-                        </span>
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-6 w-6"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  deleteNotification(notification.id);
-                                }}
-                              >
-                                <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent side="left">
-                              <p>Delete notification</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
+                  {/* Message notification */}
+                  {notification.type === 'message' && (
+                    <div className="flex items-start gap-2">
+                      <Avatar className="h-9 w-9 flex-shrink-0">
+                        <AvatarImage src={notification.fromUserPhoto} />
+                        <AvatarFallback className="bg-primary/10">
+                          {notification.fromUserName.charAt(0).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 space-y-1">
+                        <div className="flex justify-between items-start gap-2">
+                          <span className="font-medium text-sm">{notification.fromUserName}</span>
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">
+                            {formatNotificationTime(notification.createdAt)}
+                          </span>
+                        </div>
+                        <div className="flex items-start gap-1">
+                          <MessageSquare className="h-3 w-3 text-primary mt-0.5 flex-shrink-0" />
+                          <p className="text-sm text-muted-foreground flex-1 line-clamp-2">
+                            {notification.messageContent || 'Sent you a message'}
+                          </p>
+                        </div>
                       </div>
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      {getNotificationMessage(notification)}
-                    </p>
-                  </div>
+                  )}
+                  {/* Other notification types */}
+                  {notification.type !== 'message' && (
+                    <div className="flex-1 space-y-1">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-1.5">
+                          {getNotificationIcon(notification.type)}
+                          <p className="font-semibold text-sm">
+                            {notification.fromUserName}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">
+                            {formatNotificationTime(notification.createdAt)}
+                          </span>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="h-6 w-6"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    deleteNotification(notification.id);
+                                  }}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="left">
+                                <p>Delete notification</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </div>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {getNotificationMessage(notification)}
+                      </p>
+                    </div>
+                  )}
                 </DropdownMenuItem>
               ))
             ) : (

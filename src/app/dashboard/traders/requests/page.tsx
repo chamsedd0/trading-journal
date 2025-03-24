@@ -14,7 +14,8 @@ import {
   getDocs,
   deleteDoc,
   Timestamp,
-  addDoc
+  addDoc,
+  writeBatch
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
@@ -32,6 +33,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { playNotificationSound, initAudio } from '@/lib/notification-sound';
 
 interface TraderProfile {
   uid: string;
@@ -109,57 +111,56 @@ export default function ConnectionRequestsPage() {
   }, [user]);
   
   // Accept a connection request
-  const acceptRequest = async (traderUid: string) => {
+  const acceptRequest = async (traderId: string) => {
     if (!user) return;
     
     try {
-      setProcessingRequest(prev => ({ ...prev, [traderUid]: true }));
+      setProcessingRequest(prev => ({ ...prev, [traderId]: true }));
+      console.log(`Accepting request from trader ${traderId}`);
       
-      // Get current connection state
-      const currentConnections = user.profile?.connections || [];
-      const currentPendingConnections = user.profile?.pendingConnections || [];
+      // Get a reference to the batch
+      const batch = writeBatch(db);
       
-      // 1. Remove from pending connections
-      await updateDoc(doc(db, 'users', user.uid), {
-        pendingConnections: arrayRemove(traderUid),
-        connections: arrayUnion(traderUid)
+      // 1. Add to current user's connections
+      const userRef = doc(db, 'users', user.uid);
+      batch.update(userRef, {
+        connections: arrayUnion(traderId),
+        pendingConnections: arrayRemove(traderId)
       });
       
-      // 2. Remove from other user's outgoing requests and add to connections
-      await updateDoc(doc(db, 'users', traderUid), {
-        outgoingRequests: arrayRemove(user.uid),
+      // 2. Add to the trader's connections, remove from outgoingRequests
+      const traderRef = doc(db, 'users', traderId);
+      batch.update(traderRef, {
         connections: arrayUnion(user.uid),
-        hasUnreadNotifications: true
+        outgoingRequests: arrayRemove(user.uid),
+        hasUnreadNotifications: true // Mark as having unread notifications
       });
       
-      // 3. Create a notification for the other user
-      const notificationRef = collection(db, 'users', traderUid, 'notifications');
-      await addDoc(notificationRef, {
+      // 3. Create notification for the trader
+      const notification = {
         type: 'connection_accepted',
         fromUserId: user.uid,
         fromUserName: user.profile?.fullName || user.displayName || 'A trader',
         fromUserPhoto: user.photoURL || '',
         read: false,
         createdAt: Timestamp.now()
-      });
+      };
       
-      // 4. Update local state
-      setIncomingRequests(prev => prev.filter(r => r.uid !== traderUid));
+      const notificationRef = doc(collection(db, 'users', traderId, 'notifications'));
+      batch.set(notificationRef, notification);
       
-      // 5. Update auth context state
-      updateConnectionState({
-        connections: [...currentConnections, traderUid],
-        pendingConnections: currentPendingConnections.filter(id => id !== traderUid)
-      });
+      // 4. Commit the batch
+      await batch.commit();
       
-      // 6. Show success toast
-      toast.success("Connection accepted");
+      // 5. Update the local state
+      setIncomingRequests(prev => prev.filter(req => req.uid !== traderId));
       
+      toast.success('Connection request accepted');
     } catch (error) {
-      console.error("Error accepting connection request:", error);
-      toast.error("Failed to accept connection");
+      console.error('Error accepting request:', error);
+      toast.error('Failed to accept connection request');
     } finally {
-      setProcessingRequest(prev => ({ ...prev, [traderUid]: false }));
+      setProcessingRequest(prev => ({ ...prev, [traderId]: false }));
     }
   };
   
@@ -240,6 +241,24 @@ export default function ConnectionRequestsPage() {
       setProcessingRequest(prev => ({ ...prev, [traderUid]: false }));
     }
   };
+  
+  // Initialize audio on first user interaction
+  useEffect(() => {
+    const handleUserInteraction = () => {
+      initAudio();
+      // Remove event listeners after initialization
+      document.removeEventListener('click', handleUserInteraction);
+      document.removeEventListener('keydown', handleUserInteraction);
+    };
+    
+    document.addEventListener('click', handleUserInteraction);
+    document.addEventListener('keydown', handleUserInteraction);
+    
+    return () => {
+      document.removeEventListener('click', handleUserInteraction);
+      document.removeEventListener('keydown', handleUserInteraction);
+    };
+  }, []);
   
   return (
     <div className="space-y-6">

@@ -1,16 +1,19 @@
 'use client';
 
 import Link from "next/link";
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useRouter, usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
 import { DashboardNav } from "@/components/dashboard-nav";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Menu } from "lucide-react";
 import { LayoutSkeleton } from "@/components/skeletons/layout-skeleton";
 import { NotificationDropdown } from "@/components/notifications/notification-dropdown";
+import { playNotificationSound, initAudio } from '@/lib/notification-sound';
+import { db } from "@/lib/firebase";
+import { collection, onSnapshot, query, where, orderBy, limit, Timestamp, doc, updateDoc } from "firebase/firestore";
+import { toast } from "sonner";
 
 export default function DashboardLayout({
   children,
@@ -22,7 +25,140 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [notificationCount, setNotificationCount] = useState(0);
+  const [lastNotificationTimestamp, setLastNotificationTimestamp] = useState<Timestamp | null>(null);
   
+  // Initialize audio context on page load for user interaction
+  useEffect(() => {
+    const handleUserInteraction = () => {
+      initAudio();
+      // Remove event listeners after initialization
+      document.removeEventListener('click', handleUserInteraction);
+      document.removeEventListener('keydown', handleUserInteraction);
+    };
+    
+    document.addEventListener('click', handleUserInteraction);
+    document.addEventListener('keydown', handleUserInteraction);
+    
+    return () => {
+      document.removeEventListener('click', handleUserInteraction);
+      document.removeEventListener('keydown', handleUserInteraction);
+    };
+  }, []);
+  
+  // Global notification listener for the entire dashboard
+  useEffect(() => {
+    if (!user) return;
+    
+    // Listen for notifications across the app
+    const notificationsRef = collection(db, 'users', user.uid, 'notifications');
+    const q = query(
+      notificationsRef,
+      where('read', '==', false),
+      orderBy('createdAt', 'desc'),
+      limit(20)
+    );
+    
+    let isFirstLoad = true;
+    
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
+      // Get new notifications
+      const unreadNotifications = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      const newNotifications = snapshot.docChanges()
+        .filter(change => change.type === 'added')
+        .map(change => change.doc.data());
+      
+      // Only process after first load to avoid playing sounds on app startup
+      if (!isFirstLoad && newNotifications.length > 0) {
+        console.log("Dashboard detected new notification:", newNotifications[0]);
+        
+        // Update user's hasUnreadNotifications flag
+        try {
+          const userRef = doc(db, 'users', user.uid);
+          await updateDoc(userRef, { 
+            hasUnreadNotifications: true 
+          });
+          
+          // Play notification sound
+          playNotificationSound();
+          
+          // Show toast for the notification
+          const latestNotification = newNotifications[0];
+          let message = '';
+          const type = latestNotification.type;
+          
+          if (type === 'connection_request') {
+            message = `${latestNotification.fromUserName} sent you a connection request`;
+          } else if (type === 'connection_accepted') {
+            message = `${latestNotification.fromUserName} accepted your connection request`;
+          } else if (type === 'message') {
+            message = `New message from ${latestNotification.fromUserName}`;
+            if (latestNotification.messageContent) {
+              message += `: ${latestNotification.messageContent.substring(0, 30)}${latestNotification.messageContent.length > 30 ? '...' : ''}`;
+            }
+          }
+          
+          toast.info(message, {
+            duration: 4000,
+          });
+        } catch (error) {
+          console.error("Error updating unread notifications state:", error);
+        }
+      }
+      
+      isFirstLoad = false;
+      setNotificationCount(unreadNotifications.length);
+    });
+    
+    return () => unsubscribe();
+  }, [user]);
+
+  // NEW: Global listener for new messages
+  useEffect(() => {
+    if (!user) return;
+    
+    // Create a listener for all messages where the current user is the receiver
+    const messagesRef = collection(db, 'messages');
+    const messagesQuery = query(
+      messagesRef,
+      where('receiverId', '==', user.uid),
+      where('read', '==', false),
+      orderBy('createdAt', 'desc'),
+      limit(20)
+    );
+    
+    const unsubscribe = onSnapshot(messagesQuery, (snapshot) => {
+      // Check for new messages (added documents)
+      const newMessages = snapshot.docChanges().filter(change => change.type === 'added');
+      
+      if (newMessages.length > 0) {
+        console.log(`Global listener: ${newMessages.length} new messages detected`);
+        
+        // Get current pathname to check if we're in a conversation
+        const pathname = window.location.pathname;
+        const inConversation = pathname.includes('/dashboard/messages/') && 
+                              pathname !== '/dashboard/messages';
+        
+        // Only play sound if we're not currently in that conversation
+        if (!inConversation) {
+          playNotificationSound();
+          
+          // Show a toast for the new message
+          const latestMessage = newMessages[0].doc.data();
+          toast.info(`New message from ${latestMessage.senderName || 'a trader'}`, {
+            duration: 4000,
+          });
+        }
+      }
+    });
+    
+    return () => unsubscribe();
+  }, [user]);
+
   // Check for saved sidebar state in localStorage
   useEffect(() => {
     const savedCollapsed = localStorage.getItem('sidebarCollapsed');

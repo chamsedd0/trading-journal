@@ -190,23 +190,20 @@ export default function FindTradersPage() {
   
   // Send a connection request
   const sendConnectionRequest = async (traderId: string) => {
-    if (!user) return;
+    if (!user) {
+      toast.error('You must be logged in to send a connection request');
+      return;
+    }
     
     try {
       setProcessingConnection(prev => ({ ...prev, [traderId]: true }));
       
-      // 1. Add the trader to the current user's outgoing requests
-      await updateDoc(doc(db, 'users', user.uid), {
-        outgoingRequests: arrayUnion(traderId)
-      });
-      
-      // 2. Add the current user to the trader's pending connections
+      // Add to pending connections
       await updateDoc(doc(db, 'users', traderId), {
-        pendingConnections: arrayUnion(user.uid),
-        hasUnreadNotifications: true
+        pendingConnections: arrayUnion(user.uid)
       });
       
-      // 3. Create a notification for the recipient
+      // Create notification for the trader
       const notificationRef = collection(db, 'users', traderId, 'notifications');
       await addDoc(notificationRef, {
         type: 'connection_request',
@@ -217,10 +214,17 @@ export default function FindTradersPage() {
         createdAt: Timestamp.now()
       });
       
-      // 4. Show success notification
-      toast.success('Connection request sent');
+      // Mark user as having new notifications
+      await updateDoc(doc(db, 'users', traderId), {
+        hasUnreadNotifications: true
+      });
       
-      // 5. Update the local state to reflect the change
+      // Add to outgoing requests
+      await updateDoc(doc(db, 'users', user.uid), {
+        outgoingRequests: arrayUnion(traderId)
+      });
+      
+      // Update local state
       const currentOutgoingRequests = user.profile?.outgoingRequests || [];
       
       if (!currentOutgoingRequests.includes(traderId)) {
@@ -230,9 +234,10 @@ export default function FindTradersPage() {
         });
       }
       
+      toast.success('Connection request sent');
     } catch (error) {
-      console.error("Error sending connection request:", error);
-      toast.error("Failed to send connection request");
+      console.error('Error sending connection request:', error);
+      toast.error('Failed to send connection request');
     } finally {
       setProcessingConnection(prev => ({ ...prev, [traderId]: false }));
     }
