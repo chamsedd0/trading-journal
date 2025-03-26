@@ -13,10 +13,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { CheckIcon, PlusIcon, TrendingUpIcon, TrendingDownIcon, Clock, Loader2 } from "lucide-react";
+import { CheckIcon, PlusIcon, TrendingUpIcon, TrendingDownIcon, Clock, Loader2, XIcon } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-// Trade visualizer component
+// Interface for trade visualizer component
 interface TradeVisualizerProps {
   tradeData: {
     symbol: string;
@@ -36,6 +36,290 @@ interface TradeVisualizerProps {
     commission: string;
   };
   isComplete: boolean;
+}
+
+// Interface for trading plan
+interface TradingPlan {
+  concepts: string[];
+  entryRules: string[];
+  riskManagement: {
+    planType: string;
+    riskPercentage: number;
+    reduceRiskAfterLoss: boolean;
+    targetRiskRewardRatio: number;
+    customRules?: string[];
+  };
+}
+
+// Interface for trade evaluation
+interface TradeEvaluationProps {
+  tradingPlan: TradingPlan | null;
+  selectedRules: string[];
+  onSelectRule: (rule: string) => void;
+  riskRewardRatio: string | null;
+  targetRatio: number | null;
+  isComplete: boolean;
+  tradeData: {
+    entry: string;
+    sl: string;
+    size: string;
+    type: string;
+    marketType: string;
+    tickValue: string;
+    pipValue: string;
+    symbol: string;
+  };
+  account?: Account | null;
+}
+
+// Trade evaluator component
+function TradeEvaluation({ 
+  tradingPlan, 
+  selectedRules, 
+  onSelectRule, 
+  riskRewardRatio, 
+  targetRatio,
+  isComplete,
+  tradeData,
+  account
+}: TradeEvaluationProps) {
+  const hasRules = tradingPlan && ((tradingPlan.entryRules && tradingPlan.entryRules.length > 0) || 
+                                  (tradingPlan.concepts && tradingPlan.concepts.length > 0));
+  
+  // Calculate risk percentage based on stop loss
+  const riskPercentage = useMemo(() => {
+    if (!tradeData.entry || !tradeData.sl || !tradeData.size || !account?.balance) return null;
+    
+    const entry = parseFloat(tradeData.entry);
+    const sl = parseFloat(tradeData.sl);
+    const size = parseFloat(tradeData.size);
+    
+    if (isNaN(entry) || isNaN(sl) || isNaN(size) || sl === 0) return null;
+    
+    // Calculate potential loss amount
+    const isLong = tradeData.type === 'long';
+    const pointsRisked = isLong ? Math.abs(entry - sl) : Math.abs(sl - entry);
+    
+    // Calculate dollar risk based on market type
+    let dollarRisk = 0;
+    
+    if (tradeData.marketType === 'futures' || tradeData.marketType === 'stocks') {
+      // For futures and stocks, use tick value
+      const tickValue = parseFloat(tradeData.tickValue);
+      if (isNaN(tickValue)) return null;
+      
+      dollarRisk = pointsRisked * tickValue * size;
+    } 
+    else if (tradeData.marketType === 'forex' || tradeData.marketType === 'crypto') {
+      // For forex and crypto, use pip value
+      const pipValue = parseFloat(tradeData.pipValue);
+      if (isNaN(pipValue)) return null;
+      
+      // Determine pip size based on whether it's a JPY pair
+      const isPipDecimal = !tradeData.symbol.includes('JPY');
+      const pipSize = isPipDecimal ? 0.0001 : 0.01;
+      const pips = pointsRisked / pipSize;
+      
+      dollarRisk = pips * pipValue * size;
+    } 
+    else {
+      // For other market types, direct calculation
+      dollarRisk = pointsRisked * size;
+    }
+    
+    // Calculate risk as percentage of account balance
+    return (dollarRisk / account.balance) * 100;
+  }, [
+    tradeData.entry,
+    tradeData.sl,
+    tradeData.size,
+    tradeData.type,
+    tradeData.marketType,
+    tradeData.tickValue,
+    tradeData.pipValue,
+    tradeData.symbol,
+    account?.balance
+  ]);
+  
+  // Check if risk exceeds tolerance
+  const riskToleranceExceeded = useMemo(() => {
+    if (!riskPercentage || !tradingPlan?.riskManagement?.riskPercentage) return false;
+    return riskPercentage > tradingPlan.riskManagement.riskPercentage;
+  }, [
+    riskPercentage, 
+    tradingPlan?.riskManagement?.riskPercentage
+  ]);
+  
+  if (!tradingPlan) {
+    return (
+      <div className="border rounded-lg p-5 bg-card h-full">
+        <div className="text-lg font-semibold mb-4">Trading Plan Evaluation</div>
+        <div className="flex flex-col items-center justify-center h-full text-center p-6">
+          <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-4">
+            <PlusIcon className="h-6 w-6 text-muted-foreground" />
+          </div>
+          <p className="text-muted-foreground mb-2">No trading plan found</p>
+          <p className="text-sm text-muted-foreground mb-4">
+            Create a trading plan in the Journal section to evaluate your trades
+          </p>
+          <Link href="/dashboard/journal">
+            <Button variant="outline" size="sm">Go to Journal</Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+  
+  // Calculate if the current trade meets risk-reward target
+  const meetsRiskReward = riskRewardRatio && targetRatio ? 
+    parseFloat(riskRewardRatio) >= targetRatio : 
+    false;
+
+  return (
+    <div className="border rounded-lg p-5 bg-card h-full">
+      <div className="text-lg font-semibold mb-4">Trading Plan Evaluation</div>
+      
+      {!isComplete ? (
+        <div className="flex flex-col items-center justify-center h-full text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-3" />
+          <p className="text-muted-foreground">
+            Fill in trade details to evaluate against your trading plan
+          </p>
+        </div>
+      ) : !hasRules ? (
+        <div className="flex flex-col items-center justify-center h-full text-center p-6">
+          <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-4">
+            <PlusIcon className="h-6 w-6 text-muted-foreground" />
+          </div>
+          <p className="text-muted-foreground mb-2">Your trading plan has no rules yet</p>
+          <p className="text-sm text-muted-foreground mb-4">
+            Add trading concepts and entry rules to your plan
+          </p>
+          <Link href="/dashboard/journal">
+            <Button variant="outline" size="sm">Update Plan</Button>
+          </Link>
+        </div>
+      ) : (
+        <div className="space-y-4 h-full overflow-y-auto">
+          {/* Risk-Reward Evaluation */}
+          <div className="mb-4 p-4 border rounded-md">
+            <div className="flex justify-between items-center mb-2">
+              <span className="font-medium">Risk:Reward Target</span>
+              <span className={`text-sm font-semibold ${meetsRiskReward ? 'text-[#089981]' : 'text-muted-foreground'}`}>
+                1:{tradingPlan.riskManagement.targetRiskRewardRatio}
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="font-medium">This Trade</span>
+              <span className={`text-sm font-semibold ${meetsRiskReward ? 'text-[#089981]' : 'text-[#f23645]'}`}>
+                {riskRewardRatio ? `1:${riskRewardRatio}` : 'N/A'}
+              </span>
+            </div>
+            
+            {riskRewardRatio && (
+              <div className="mt-2 pt-2 border-t text-sm text-muted-foreground">
+                {meetsRiskReward ? (
+                  <div className="flex items-center text-[#089981]">
+                    <CheckIcon className="h-4 w-4 mr-1" />
+                    <span>Meets target risk:reward ratio</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center text-[#f23645]">
+                    <Clock className="h-4 w-4 mr-1" />
+                    <span>Below target risk:reward ratio</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          
+          {/* Risk Management Evaluation */}
+          {tradingPlan.riskManagement && tradingPlan.riskManagement.riskPercentage > 0 && (
+            <div className="mb-4 p-4 border rounded-md">
+              <div className="flex justify-between items-center mb-2">
+                <span className="font-medium">Risk Tolerance</span>
+                <span className="text-sm font-semibold">
+                  {tradingPlan.riskManagement.riskPercentage}% per trade
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="font-medium">Current Risk</span>
+                <span className={`text-sm font-semibold ${!riskToleranceExceeded ? 'text-[#089981]' : 'text-[#f23645]'}`}>
+                  {riskPercentage ? `${riskPercentage.toFixed(2)}%` : 'N/A'}
+                </span>
+              </div>
+              
+              {riskPercentage && (
+                <div className="mt-2 pt-2 border-t text-sm text-muted-foreground">
+                  {!riskToleranceExceeded ? (
+                    <div className="flex items-center text-[#089981]">
+                      <CheckIcon className="h-4 w-4 mr-1" />
+                      <span>Within risk tolerance limits</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center text-[#f23645]">
+                      <XIcon className="h-4 w-4 mr-1" />
+                      <span>Exceeds risk tolerance of {tradingPlan.riskManagement.riskPercentage}%</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+          
+          {/* Trading Concepts */}
+          {tradingPlan.concepts && tradingPlan.concepts.length > 0 && (
+            <div>
+              <h4 className="text-sm font-medium mb-2">Trading Concepts Used</h4>
+              <div className="space-y-2">
+                {tradingPlan.concepts.map((concept, index) => (
+                  <div 
+                    key={`concept-${index}`}
+                    className={`p-3 rounded-md border flex items-center gap-2 cursor-pointer ${
+                      selectedRules.includes(concept) ? 'border-primary bg-primary/10' : 'hover:bg-muted/50'
+                    }`}
+                    onClick={() => onSelectRule(concept)}
+                  >
+                    <div className={`w-5 h-5 rounded-sm border flex items-center justify-center ${
+                      selectedRules.includes(concept) ? 'bg-primary border-primary' : 'border-input'
+                    }`}>
+                      {selectedRules.includes(concept) && <CheckIcon className="h-3 w-3 text-white" />}
+                    </div>
+                    <span className="text-sm">{concept}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          {/* Entry Rules */}
+          {tradingPlan.entryRules && tradingPlan.entryRules.length > 0 && (
+            <div className="mt-4">
+              <h4 className="text-sm font-medium mb-2">Entry Rules Followed</h4>
+              <div className="space-y-2">
+                {tradingPlan.entryRules.map((rule, index) => (
+                  <div 
+                    key={`rule-${index}`}
+                    className={`p-3 rounded-md border flex items-center gap-2 cursor-pointer ${
+                      selectedRules.includes(rule) ? 'border-primary bg-primary/10' : 'hover:bg-muted/50'
+                    }`}
+                    onClick={() => onSelectRule(rule)}
+                  >
+                    <div className={`w-5 h-5 rounded-sm border flex items-center justify-center ${
+                      selectedRules.includes(rule) ? 'bg-primary border-primary' : 'border-input'
+                    }`}>
+                      {selectedRules.includes(rule) && <CheckIcon className="h-3 w-3 text-white" />}
+                    </div>
+                    <span className="text-sm">{rule}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // Interface for candle data
@@ -76,7 +360,13 @@ function TradeVisualizer({ tradeData, isComplete }: TradeVisualizerProps) {
     if (risk === 0) return null; // Avoid division by zero
     
     return (reward / risk).toFixed(2);
-  }, [entry, exit, sl, hasSL, isLong]);
+  }, [
+    entry,
+    exit,
+    sl,
+    hasSL,
+    isLong
+  ]);
 
   // Calculate price range for chart visualization
   const priceRange = useMemo(() => {
@@ -95,7 +385,15 @@ function TradeVisualizer({ tradeData, isComplete }: TradeVisualizerProps) {
       max: maxPrice,
       range: maxPrice - minPrice
     };
-  }, [entry, exit, tp, sl, hasTP, hasSL, isValidTrade]);
+  }, [
+    entry, 
+    exit, 
+    tp, 
+    sl, 
+    hasTP, 
+    hasSL, 
+    isValidTrade
+  ]);
 
   // Calculate position of price points in the chart (percentage of height)
   const entryPosition = isValidTrade 
@@ -124,7 +422,10 @@ function TradeVisualizer({ tradeData, isComplete }: TradeVisualizerProps) {
       const position = 100 - (i * 20); // 5 steps = 20% each
       return { price, position };
     });
-  }, [priceRange.min, priceStep]);
+  }, [
+    priceRange.min, 
+    priceStep
+  ]);
 
   // Generate candlestick data for visualization
   // Simple direct function instead of useMemo to fix rendering issues
@@ -612,6 +913,9 @@ export default function NewTradePage() {
     notes: '',
     tags: []
   });
+  const [tradingPlan, setTradingPlan] = useState<TradingPlan | null>(null);
+  const [selectedRules, setSelectedRules] = useState<string[]>([]);
+  const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
 
   // Check if the trade data is complete enough to show a visualization
   const isTradeComplete = useMemo(() => {
@@ -623,17 +927,66 @@ export default function NewTradePage() {
       !isNaN(parseFloat(tradeData.entry)) && 
       !isNaN(parseFloat(tradeData.exit))
     );
-  }, [tradeData.symbol, tradeData.entry, tradeData.exit, tradeData.size]);
+  }, [
+    tradeData.symbol, 
+    tradeData.entry, 
+    tradeData.exit, 
+    tradeData.size
+  ]);
+
+  // Calculate risk-reward ratio
+  const riskRewardRatio = useMemo(() => {
+    if (!tradeData.sl || !tradeData.entry || !tradeData.exit) return null;
+    
+    const entry = parseFloat(tradeData.entry);
+    const exit = parseFloat(tradeData.exit);
+    const sl = parseFloat(tradeData.sl);
+    const isLong = tradeData.type === 'long';
+    
+    if (isNaN(entry) || isNaN(exit) || isNaN(sl)) return null;
+    
+    let reward: number, risk: number;
+    
+    if (isLong) {
+      reward = Math.abs(exit - entry);
+      risk = Math.abs(entry - sl);
+    } else {
+      reward = Math.abs(entry - exit);
+      risk = Math.abs(sl - entry);
+    }
+    
+    if (risk === 0) return null; // Avoid division by zero
+    
+    return (reward / risk).toFixed(2);
+  }, [
+    tradeData.entry,
+    tradeData.exit,
+    tradeData.sl,
+    tradeData.type
+  ]);
+
+  // Toggle rule selection
+  const toggleRuleSelection = (rule: string) => {
+    setSelectedRules(prev => {
+      if (prev.includes(rule)) {
+        return prev.filter(r => r !== rule);
+      } else {
+        return [...prev, rule];
+      }
+    });
+  };
 
   // Fetch user accounts
   useEffect(() => {
-    const fetchAccounts = async () => {
+    const fetchUserData = async () => {
       if (!user) return;
       
       try {
         const userDoc = await getDoc(doc(db, "users", user.uid));
         if (userDoc.exists()) {
           const userData = userDoc.data();
+          
+          // Get trading accounts
           if (userData.accounts && userData.accounts.length > 0) {
             setAccounts(userData.accounts);
             // Set default selection to first account
@@ -647,14 +1000,19 @@ export default function NewTradePage() {
               }
             });
           }
+          
+          // Get trading plan if it exists
+          if (userData.tradingPlan) {
+            setTradingPlan(userData.tradingPlan);
+          }
         }
       } catch (error) {
-        console.error("Error fetching accounts:", error);
-        toast.error("Failed to load accounts");
+        console.error("Error fetching user data:", error);
+        toast.error("Failed to load user data");
       }
     };
     
-    fetchAccounts();
+    fetchUserData();
   }, [user, router]);
 
   // Add a separated useEffect for calculating P&L
@@ -724,7 +1082,108 @@ export default function NewTradePage() {
         pnl: newPnl
       }));
     }
-  }, [tradeData.entry, tradeData.exit, tradeData.size, tradeData.type, tradeData.pnl, tradeData.marketType, tradeData.tickValue, tradeData.pipValue, tradeData.commission, tradeData.symbol]);
+  }, [
+    tradeData.entry,
+    tradeData.exit,
+    tradeData.size,
+    tradeData.type,
+    tradeData.pnl,
+    tradeData.marketType,
+    tradeData.tickValue,
+    tradeData.pipValue,
+    tradeData.commission,
+    tradeData.symbol
+  ]);
+
+  // Update selectedAccount when selectedAccounts changes
+  useEffect(() => {
+    if (selectedAccounts.length === 1) {
+      const account = accounts.find(acc => acc.id === selectedAccounts[0]) || null;
+      setSelectedAccount(account);
+    } else {
+      setSelectedAccount(null);
+    }
+  }, [selectedAccounts, accounts]);
+
+  // Check risk tolerance when SL or selected account changes
+  useEffect(() => {
+    // Create a debounced version to avoid multiple warnings
+    const checkRiskTolerance = () => {
+      if (!tradeData.sl || !tradeData.entry || !tradeData.size || !selectedAccount || !tradingPlan?.riskManagement?.riskPercentage) {
+        return;
+      }
+
+      const entry = parseFloat(tradeData.entry);
+      const sl = parseFloat(tradeData.sl);
+      const size = parseFloat(tradeData.size);
+      
+      if (isNaN(entry) || isNaN(sl) || isNaN(size) || sl === 0 || !selectedAccount.balance) {
+        return;
+      }
+      
+      // Calculate potential loss amount
+      const isLong = tradeData.type === 'long';
+      const pointsRisked = isLong ? Math.abs(entry - sl) : Math.abs(sl - entry);
+      
+      // Calculate dollar risk based on market type
+      let dollarRisk = 0;
+      
+      if (tradeData.marketType === 'futures' || tradeData.marketType === 'stocks') {
+        // For futures and stocks, use tick value
+        const tickValue = parseFloat(tradeData.tickValue);
+        if (isNaN(tickValue)) return;
+        
+        dollarRisk = pointsRisked * tickValue * size;
+      } 
+      else if (tradeData.marketType === 'forex' || tradeData.marketType === 'crypto') {
+        // For forex and crypto, use pip value
+        const pipValue = parseFloat(tradeData.pipValue);
+        if (isNaN(pipValue)) return;
+        
+        // Determine pip size based on whether it's a JPY pair
+        const isPipDecimal = !tradeData.symbol.includes('JPY');
+        const pipSize = isPipDecimal ? 0.0001 : 0.01;
+        const pips = pointsRisked / pipSize;
+        
+        dollarRisk = pips * pipValue * size;
+      } 
+      else {
+        // For other market types, direct calculation
+        dollarRisk = pointsRisked * size;
+      }
+      
+      // Calculate risk as percentage of account balance
+      const riskPercentage = (dollarRisk / selectedAccount.balance) * 100;
+      
+      // Check if risk exceeds tolerance
+      if (riskPercentage > tradingPlan.riskManagement.riskPercentage) {
+        toast.warning(
+          `Risk Warning: Stop Loss exceeds your risk tolerance`, 
+          {
+            description: `Current risk: ${riskPercentage.toFixed(2)}% exceeds your limit of ${tradingPlan.riskManagement.riskPercentage}%`,
+            duration: 5000,
+            position: 'top-center'
+          }
+        );
+      }
+    };
+
+    // Execute the check
+    checkRiskTolerance();
+
+  // Ensure the dependency array has a consistent format with initialized values
+  }, [
+    tradeData.sl, 
+    tradeData.entry, 
+    tradeData.size, 
+    tradeData.type, 
+    tradeData.marketType, 
+    tradeData.tickValue, 
+    tradeData.pipValue, 
+    tradeData.symbol, 
+    selectedAccount, 
+    tradingPlan?.riskManagement?.riskPercentage
+  ]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -812,6 +1271,7 @@ export default function NewTradePage() {
           commission: parseFloat(tradeData.commission),
           pnl: parseFloat(tradeData.pnl),
           notes: tradeData.notes,
+          followedRules: selectedRules.length > 0 ? selectedRules : [],
           createdAt: new Date().getTime()
         };
         
@@ -889,9 +1349,10 @@ export default function NewTradePage() {
       <div className="flex flex-col xl:flex-row gap-6">
         <div className="flex-1">
           <Tabs defaultValue="details" className="w-full" value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="details">Trade Details</TabsTrigger>
           <TabsTrigger value="accounts">Select Accounts</TabsTrigger>
+          <TabsTrigger value="evaluation">Evaluation</TabsTrigger>
         </TabsList>
         
         <Card className="border-t-0 rounded-tl-none rounded-tr-none">
@@ -1202,14 +1663,24 @@ export default function NewTradePage() {
                   <span className="text-sm text-muted-foreground">
                     This trade will be added to {selectedAccounts.length} {selectedAccounts.length === 1 ? 'account' : 'accounts'}
                   </span>
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => setActiveTab("accounts")}
-                  >
-                    Change Accounts
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => setActiveTab("accounts")}
+                    >
+                      Change Accounts
+                    </Button>
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => setActiveTab("evaluation")}
+                    >
+                      Evaluate Trade
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </TabsContent>
@@ -1285,6 +1756,36 @@ export default function NewTradePage() {
               </CardContent>
             </TabsContent>
             
+            <TabsContent value="evaluation" className="m-0">
+              <CardHeader>
+                <CardTitle>Trading Plan Evaluation</CardTitle>
+                <CardDescription>
+                  Evaluate this trade against your trading plan rules
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="min-h-[400px]">
+                <TradeEvaluation 
+                  tradingPlan={tradingPlan}
+                  selectedRules={selectedRules}
+                  onSelectRule={toggleRuleSelection}
+                  riskRewardRatio={riskRewardRatio}
+                  targetRatio={tradingPlan?.riskManagement?.targetRiskRewardRatio || null}
+                  isComplete={isTradeComplete}
+                  tradeData={{
+                    entry: tradeData.entry,
+                    sl: tradeData.sl,
+                    size: tradeData.size,
+                    type: tradeData.type,
+                    marketType: tradeData.marketType,
+                    tickValue: tradeData.tickValue,
+                    pipValue: tradeData.pipValue,
+                    symbol: tradeData.symbol
+                  }}
+                  account={selectedAccount}
+                />
+              </CardContent>
+            </TabsContent>
+            
             <CardFooter className="flex justify-between p-6">
               <Link href="/dashboard/trades">
                 <Button variant="outline">Cancel</Button>
@@ -1305,10 +1806,35 @@ export default function NewTradePage() {
         
         {/* Trade Visualization */}
         <div className="w-full xl:w-[380px] md:min-h-[550px]">
-          <TradeVisualizer 
-            tradeData={tradeData} 
-            isComplete={isTradeComplete}
-          />
+          <div className="grid grid-cols-1 gap-4">
+            <TradeVisualizer 
+              tradeData={tradeData} 
+              isComplete={isTradeComplete}
+            />
+
+            {/* Mobile-only evaluation section */}
+            <div className="xl:hidden">
+              <TradeEvaluation 
+                tradingPlan={tradingPlan}
+                selectedRules={selectedRules}
+                onSelectRule={toggleRuleSelection}
+                riskRewardRatio={riskRewardRatio}
+                targetRatio={tradingPlan?.riskManagement?.targetRiskRewardRatio || null}
+                isComplete={isTradeComplete}
+                tradeData={{
+                  entry: tradeData.entry,
+                  sl: tradeData.sl,
+                  size: tradeData.size,
+                  type: tradeData.type,
+                  marketType: tradeData.marketType,
+                  tickValue: tradeData.tickValue,
+                  pipValue: tradeData.pipValue,
+                  symbol: tradeData.symbol
+                }}
+                account={selectedAccount}
+              />
+            </div>
+          </div>
         </div>
       </div>
     </div>

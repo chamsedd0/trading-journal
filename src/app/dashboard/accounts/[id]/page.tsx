@@ -1,12 +1,16 @@
+'use client';
+
 import { Suspense } from 'react';
 import AccountDetailsClient from './AccountDetailsClient';
-import { use } from 'react';
+import { useParams } from 'next/navigation';
 
-export default function AccountDetailsPage({ params }: { params: { id: string } }) {
-  const resolvedParams = use(params);
+export default function AccountDetailsPage() {
+  const params = useParams();
+  const accountId = params?.id as string;
+  
   return (
     <Suspense fallback={<div>Loading account details...</div>}>
-      <AccountDetailsClient accountId={resolvedParams.id} />
+      <AccountDetailsClient accountId={accountId} />
     </Suspense>
   );
 }
