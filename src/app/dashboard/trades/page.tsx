@@ -247,14 +247,24 @@ export default function TradesPage() {
     <div className="space-y-8">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <h1 className="text-3xl font-bold">Trades History</h1>
-        <Link href="/dashboard/trades/new">
-          <Button className="shadow-sm w-full md:w-auto mobile-icon-only">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            <span className="button-text ml-2">New Trade</span>
-          </Button>
-        </Link>
+        <div className="flex flex-col md:flex-row gap-2">
+          <Link href="/dashboard/trades/import">
+            <Button variant="outline" className="shadow-sm w-full md:w-auto mobile-icon-only">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 15v4c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2v-4M17 8l-5-5-5 5M12 4.2v10.3" />
+              </svg>
+              <span className="button-text ml-2">Import Trades</span>
+            </Button>
+          </Link>
+          <Link href="/dashboard/trades/new">
+            <Button className="shadow-sm w-full md:w-auto mobile-icon-only">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              <span className="button-text ml-2">New Trade</span>
+            </Button>
+          </Link>
+        </div>
       </div>
       
       {isEmptyState ? (
@@ -268,14 +278,24 @@ export default function TradesPage() {
               </svg>
             </div>
             <p className="text-muted-foreground mb-4">You don't have any trades yet.</p>
-            <Link href="/dashboard/trades/new">
-              <Button className="shadow-sm mobile-icon-only">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 5v14M5 12h14" />
-                </svg>
-                <span className="button-text ml-2">Add Your First Trade</span>
-              </Button>
-            </Link>
+            <div className="flex flex-col sm:flex-row gap-2 justify-center">
+              <Link href="/dashboard/trades/new">
+                <Button className="shadow-sm mobile-icon-only">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                  <span className="button-text ml-2">Add Trade</span>
+                </Button>
+              </Link>
+              <Link href="/dashboard/trades/import">
+                <Button variant="outline" className="shadow-sm mobile-icon-only">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 15v4c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2v-4M17 8l-5-5-5 5M12 4.2v10.3" />
+                  </svg>
+                  <span className="button-text ml-2">Import Trades</span>
+                </Button>
+              </Link>
+            </div>
           </CardContent>
         </Card>
       ) : (

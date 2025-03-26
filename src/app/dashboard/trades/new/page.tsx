@@ -1664,14 +1664,14 @@ export default function NewTradePage() {
                     This trade will be added to {selectedAccounts.length} {selectedAccounts.length === 1 ? 'account' : 'accounts'}
                   </span>
                   <div className="flex gap-2">
-                    <Button 
-                      type="button" 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={() => setActiveTab("accounts")}
-                    >
-                      Change Accounts
-                    </Button>
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => setActiveTab("accounts")}
+                  >
+                    Change Accounts
+                  </Button>
                     <Button 
                       type="button" 
                       variant="outline" 
@@ -1679,7 +1679,7 @@ export default function NewTradePage() {
                       onClick={() => setActiveTab("evaluation")}
                     >
                       Evaluate Trade
-                    </Button>
+                  </Button>
                   </div>
                 </div>
               </CardContent>
@@ -1807,9 +1807,9 @@ export default function NewTradePage() {
         {/* Trade Visualization */}
         <div className="w-full xl:w-[380px] md:min-h-[550px]">
           <div className="grid grid-cols-1 gap-4">
-            <TradeVisualizer 
-              tradeData={tradeData} 
-              isComplete={isTradeComplete}
+          <TradeVisualizer 
+            tradeData={tradeData} 
+            isComplete={isTradeComplete}
             />
 
             {/* Mobile-only evaluation section */}
