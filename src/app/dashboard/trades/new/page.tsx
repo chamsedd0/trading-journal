@@ -30,6 +30,10 @@ interface TradeVisualizerProps {
     pnl: string;
     date: string;
     time: string;
+    marketType: string;
+    tickValue: string;
+    pipValue: string;
+    commission: string;
   };
   isComplete: boolean;
 }
@@ -594,12 +598,16 @@ export default function NewTradePage() {
     date: new Date().toISOString().slice(0, 10), // Today's date in YYYY-MM-DD format
     time: new Date().toTimeString().slice(0, 8), // Current time in HH:MM:SS format
     type: 'long',
+    marketType: 'futures', // Default market type
     entry: '',
     exit: '',
     exitTime: new Date().toTimeString().slice(0, 8), // Time of exit
     tp: '', // Take Profit
     sl: '', // Stop Loss
     size: '',
+    tickValue: '5', // Default $5 per tick for futures
+    pipValue: '10', // Default $10 per pip for forex
+    commission: '2.5', // Default commission per contract/lot
     pnl: '',
     notes: '',
     tags: []
@@ -659,17 +667,52 @@ export default function NewTradePage() {
     const entry = parseFloat(tradeData.entry);
     const exit = parseFloat(tradeData.exit);
     const size = parseFloat(tradeData.size);
+    const commission = parseFloat(tradeData.commission);
 
     // Skip calculation if any parsed value is invalid
-    if (isNaN(entry) || isNaN(exit) || isNaN(size)) {
+    if (isNaN(entry) || isNaN(exit) || isNaN(size) || isNaN(commission)) {
       return;
     }
 
     let pnl;
+    const totalCommission = commission * size;
+    
+    // Calculate PNL based on market type
+    if (tradeData.marketType === 'futures' || tradeData.marketType === 'stocks') {
+      // Calculate ticks
+      const tickValue = parseFloat(tradeData.tickValue);
+      if (isNaN(tickValue)) return;
+      
+      const tickSize = 1; // Default tick size of 1 point
+      const ticks = Math.abs(exit - entry) / tickSize;
+      
     if (tradeData.type === 'long') {
-      pnl = (exit - entry) * size;
+        pnl = ((exit - entry) * tickValue * size) - totalCommission;
     } else {
-      pnl = (entry - exit) * size;
+        pnl = ((entry - exit) * tickValue * size) - totalCommission;
+      }
+    } else if (tradeData.marketType === 'forex' || tradeData.marketType === 'crypto') {
+      // Calculate pips
+      const pipValue = parseFloat(tradeData.pipValue);
+      if (isNaN(pipValue)) return;
+      
+      // For forex, we calculate in pips (0.0001 for most pairs, 0.01 for JPY pairs)
+      const isPipDecimal = !tradeData.symbol.includes('JPY');
+      const pipSize = isPipDecimal ? 0.0001 : 0.01;
+      const pips = Math.abs(exit - entry) / pipSize;
+      
+      if (tradeData.type === 'long') {
+        pnl = ((exit - entry) / pipSize * pipValue * size) - totalCommission;
+      } else {
+        pnl = ((entry - exit) / pipSize * pipValue * size) - totalCommission;
+      }
+    } else {
+      // Default calculation for other markets (direct price difference)
+      if (tradeData.type === 'long') {
+        pnl = ((exit - entry) * size) - totalCommission;
+      } else {
+        pnl = ((entry - exit) * size) - totalCommission;
+      }
     }
     
     const newPnl = pnl.toFixed(2);
@@ -681,7 +724,7 @@ export default function NewTradePage() {
         pnl: newPnl
       }));
     }
-  }, [tradeData.entry, tradeData.exit, tradeData.size, tradeData.type, tradeData.pnl]);
+  }, [tradeData.entry, tradeData.exit, tradeData.size, tradeData.type, tradeData.pnl, tradeData.marketType, tradeData.tickValue, tradeData.pipValue, tradeData.commission, tradeData.symbol]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -757,12 +800,16 @@ export default function NewTradePage() {
             nanoseconds: 0
           },
           type: tradeData.type,
+          marketType: tradeData.marketType,
           entry: parseFloat(tradeData.entry),
           exit: parseFloat(tradeData.exit),
           exitTime: tradeData.exitTime,
           tp: tradeData.tp ? parseFloat(tradeData.tp) : null,
           sl: tradeData.sl ? parseFloat(tradeData.sl) : null,
           size: parseFloat(tradeData.size),
+          tickValue: tradeData.marketType === 'futures' || tradeData.marketType === 'stocks' ? parseFloat(tradeData.tickValue) : null,
+          pipValue: tradeData.marketType === 'forex' || tradeData.marketType === 'crypto' ? parseFloat(tradeData.pipValue) : null,
+          commission: parseFloat(tradeData.commission),
           pnl: parseFloat(tradeData.pnl),
           notes: tradeData.notes,
           createdAt: new Date().getTime()
@@ -897,6 +944,25 @@ export default function NewTradePage() {
                   </div>
                 </div>
                 
+                <div className="space-y-2">
+                  <Label htmlFor="marketType">Market Type</Label>
+                  <Select 
+                    value={tradeData.marketType} 
+                    onValueChange={(value) => handleSelectChange('marketType', value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select market type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="futures">Futures</SelectItem>
+                      <SelectItem value="forex">Forex</SelectItem>
+                      <SelectItem value="stocks">Stocks</SelectItem>
+                      <SelectItem value="crypto">Crypto</SelectItem>
+                      <SelectItem value="options">Options</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
                 <div className="grid grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <Label htmlFor="date">Date</Label>
@@ -963,7 +1029,64 @@ export default function NewTradePage() {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="size">Position Size</Label>
+                    <Label htmlFor="exitTime">Exit Time</Label>
+                    <Input
+                      id="exitTime"
+                      name="exitTime"
+                      type="time"
+                      step="1"
+                      value={tradeData.exitTime}
+                      onChange={handleInputChange}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="tp">Take Profit (TP)</Label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                        <span className="text-gray-500">$</span>
+                      </div>
+                      <Input
+                        id="tp"
+                        name="tp"
+                        type="number"
+                        step="0.01"
+                        value={tradeData.tp}
+                        onChange={handleInputChange}
+                        placeholder="0.00"
+                        className="pl-7"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="sl">Stop Loss (SL)</Label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                        <span className="text-gray-500">$</span>
+                      </div>
+                      <Input
+                        id="sl"
+                        name="sl"
+                        type="number"
+                        step="0.01"
+                        value={tradeData.sl}
+                        onChange={handleInputChange}
+                        placeholder="0.00"
+                        className="pl-7"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="size">
+                      {tradeData.marketType === 'futures' || tradeData.marketType === 'stocks' || tradeData.marketType === 'options'
+                        ? 'Contracts'
+                        : tradeData.marketType === 'forex' || tradeData.marketType === 'crypto'
+                        ? 'Lots'
+                        : 'Position Size'}
+                    </Label>
                     <Input
                       id="size"
                       name="size"
@@ -976,57 +1099,57 @@ export default function NewTradePage() {
                     />
                   </div>
                 </div>
-                    
-                    <div className="grid grid-cols-3 gap-6">
-                      <div className="space-y-2">
-                        <Label htmlFor="tp">Take Profit (TP)</Label>
-                        <div className="relative">
-                          <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                            <span className="text-gray-500">$</span>
-                          </div>
-                          <Input
-                            id="tp"
-                            name="tp"
-                            type="number"
-                            step="0.01"
-                            value={tradeData.tp}
-                            onChange={handleInputChange}
-                            placeholder="0.00"
-                            className="pl-7"
-                          />
-                        </div>
+
+                {/* Market specific fields */}
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label htmlFor={tradeData.marketType === 'forex' || tradeData.marketType === 'crypto' ? 'pipValue' : 'tickValue'}>
+                      {tradeData.marketType === 'forex' || tradeData.marketType === 'crypto'
+                        ? 'Pip Value ($)'
+                        : 'Tick Value ($)'}
+                    </Label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                        <span className="text-gray-500">$</span>
                       </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="sl">Stop Loss (SL)</Label>
-                        <div className="relative">
-                          <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                            <span className="text-gray-500">$</span>
-                          </div>
-                          <Input
-                            id="sl"
-                            name="sl"
-                            type="number"
-                            step="0.01"
-                            value={tradeData.sl}
-                            onChange={handleInputChange}
-                            placeholder="0.00"
-                            className="pl-7"
-                          />
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="exitTime">Exit Time</Label>
-                        <Input
-                          id="exitTime"
-                          name="exitTime"
-                          type="time"
-                          step="1"
-                          value={tradeData.exitTime}
-                          onChange={handleInputChange}
-                          required
-                        />
-                      </div>
+                      <Input
+                        id={tradeData.marketType === 'forex' || tradeData.marketType === 'crypto' ? 'pipValue' : 'tickValue'}
+                        name={tradeData.marketType === 'forex' || tradeData.marketType === 'crypto' ? 'pipValue' : 'tickValue'}
+                        type="number"
+                        step="0.01"
+                        value={tradeData.marketType === 'forex' || tradeData.marketType === 'crypto' ? tradeData.pipValue : tradeData.tickValue}
+                        onChange={handleInputChange}
+                        placeholder="0.00"
+                        className="pl-7"
+                        required
+                      />
                     </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="commission">
+                      Commission per {tradeData.marketType === 'futures' || tradeData.marketType === 'stocks' || tradeData.marketType === 'options'
+                        ? 'Contract'
+                        : 'Lot'} ($)
+                    </Label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                        <span className="text-gray-500">$</span>
+                      </div>
+                      <Input
+                        id="commission"
+                        name="commission"
+                        type="number"
+                        step="0.01"
+                        value={tradeData.commission}
+                        onChange={handleInputChange}
+                        placeholder="0.00"
+                        className="pl-7"
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
                 
                 <div className="space-y-2">
                   <Label htmlFor="pnl">Profit/Loss</Label>
